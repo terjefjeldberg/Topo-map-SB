@@ -307,6 +307,34 @@
 
 <script>
   var S = window._sbState;
+
+  // Hardcoded proj4 definitions for common Norwegian CRS
+  // These are used as fallback if epsg.io fetch fails or returns bad data
+  var _knownCRS = {
+    'EPSG:5941': '+proj=tmerc +lat_0=58 +lon_0=5.5 +k=1 +x_0=100000 +y_0=1000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+    'EPSG:5942': '+proj=tmerc +lat_0=58 +lon_0=6.5 +k=1 +x_0=100000 +y_0=1000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+    'EPSG:5943': '+proj=tmerc +lat_0=58 +lon_0=7.5 +k=1 +x_0=100000 +y_0=1000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+    'EPSG:5944': '+proj=tmerc +lat_0=58 +lon_0=8.5 +k=1 +x_0=100000 +y_0=1000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+    'EPSG:5945': '+proj=tmerc +lat_0=58 +lon_0=9.5 +k=1 +x_0=100000 +y_0=1000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+    'EPSG:5946': '+proj=tmerc +lat_0=58 +lon_0=10.5 +k=1 +x_0=100000 +y_0=1000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+    'EPSG:5947': '+proj=tmerc +lat_0=58 +lon_0=11.5 +k=1 +x_0=100000 +y_0=1000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+    'EPSG:5948': '+proj=tmerc +lat_0=58 +lon_0=12.5 +k=1 +x_0=100000 +y_0=1000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+    'EPSG:5949': '+proj=tmerc +lat_0=58 +lon_0=13.5 +k=1 +x_0=100000 +y_0=1000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+    'EPSG:5950': '+proj=tmerc +lat_0=58 +lon_0=14.5 +k=1 +x_0=100000 +y_0=1000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
+    'EPSG:25832': '+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs',
+    'EPSG:25833': '+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs',
+    'EPSG:32632': '+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs',
+    'EPSG:32633': '+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs'
+  };
+
+  function registerKnownCRS(epsg) {
+    if (_knownCRS[epsg] && !proj4.defs(epsg)) {
+      proj4.defs(epsg, _knownCRS[epsg]);
+      return true;
+    }
+    return false;
+  }
+
   function sp(e) { document.getElementById('epsg-input').value = e; }
   function setMsg(m) { document.getElementById('load-msg').textContent = m; }
 
@@ -322,15 +350,14 @@
   function loadEPSG(epsg, cb) {
     if (typeof proj4 !== 'undefined' && proj4.defs(epsg)) { cb(null); return; }
     if (typeof proj4 === 'undefined') { cb('proj4 not loaded yet'); return; }
+    // Try hardcoded known-good definition first
+    if (registerKnownCRS(epsg)) { cb(null); return; }
+    // Fall back to epsg.io fetch
     var code = epsg.replace('EPSG:','');
     fetch('https://epsg.io/' + code + '.proj4')
       .then(function(r){ return r.text(); })
       .then(function(def){
         if (!def || def.indexOf('+proj') === -1) { cb('Unknown EPSG: ' + epsg); return; }
-        // Ensure axis order is Easting,Northing for projected CRS
-        if (def.indexOf('+axis') === -1 && def.indexOf('+proj=longlat') === -1) {
-          def = def + ' +axis=enu';
-        }
         proj4.defs(epsg, def);
         cb(null);
       })
@@ -339,18 +366,8 @@
 
   function toWgs84(easting, northing) {
     try {
-      // Always convert via WGS84 using explicit +axis definition
-      // proj4 always returns [lon, lat] for EPSG:4326
-      // But NTM/UTM source CRS have [Easting, Northing] input
-      var wgs84 = '+proj=longlat +datum=WGS84 +no_defs';
-      var r = proj4(S.epsg, wgs84, [easting, northing]);
-      var lon = r[0], lat = r[1];
-      // If result is clearly wrong (not geographic range), try swapped input
-      if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
-        r = proj4(S.epsg, wgs84, [northing, easting]);
-        lon = r[0]; lat = r[1];
-      }
-      return { lon: lon, lat: lat };
+      var r = proj4(S.epsg, 'EPSG:4326', [easting, northing]);
+      return { lon: r[0], lat: r[1] };
     } catch(e) { return null; }
   }
 
