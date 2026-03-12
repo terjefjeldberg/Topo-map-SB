@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- saved from url=(0061)file:///C:/Users/terje/Downloads/streambim-topo-widget_5.html -->
+<!-- saved from url=(0061)file:///C:/Users/terje/Downloads/streambim-topo-widget_6.html -->
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -190,7 +190,7 @@
     <div id="status-bar">
       <div class="status-pill">
         <div class="status-dot" id="conn-dot"></div>
-        <span id="conn-label">Awaiting connection</span>
+        <span id="conn-label">Connecting…</span>
       </div>
     </div>
   </div>
@@ -359,39 +359,6 @@
     document.getElementById('val-alt').textContent = (alt || 0).toFixed(1) + ' m';
   }
 
-  function connectStreamBIM() {
-    const dot = document.getElementById('conn-dot');
-    document.getElementById('conn-label').textContent = 'Connecting…';
-
-    window.StreamBIM.connect({
-      cameraChanged: function(camera) {
-        if (!camera?.position) return;
-        const { x, y, z } = camera.position;
-        const wgs = crsToWgs84(x, y);
-        if (!wgs) return;
-        log(`→ (${wgs.lat.toFixed(5)}°, ${wgs.lon.toFixed(5)}°)`);
-        flyTo(wgs.lon, wgs.lat, z);
-      },
-      pickedObject: function(result) {
-        if (!result?.point) return;
-        const wgs = crsToWgs84(result.point.x, result.point.y);
-        if (!wgs) return;
-        log(`Picked → (${wgs.lat.toFixed(5)}°, ${wgs.lon.toFixed(5)}°)`, 'success');
-        flyTo(wgs.lon, wgs.lat, result.point.z);
-      }
-    })
-    .then(() => {
-      dot.className = 'status-dot connected';
-      document.getElementById('conn-label').textContent = 'Connected';
-      log('StreamBIM connected ✓', 'success');
-    })
-    .catch(() => {
-      dot.className = 'status-dot error';
-      document.getElementById('conn-label').textContent = 'Not in StreamBIM';
-      log('Not running inside StreamBIM', 'warn');
-    });
-  }
-
   function runSimulation() {
     // Sample UTM 32N coordinates — replace with coords from your actual project area
     const points = [
@@ -412,13 +379,47 @@
     }, 1400);
   }
 
-  function waitForCesium(callback) {
-    if (typeof Cesium !== 'undefined') {
-      callback();
-    } else {
-      log('Waiting for Cesium to load…', 'warn');
-      setTimeout(() => waitForCesium(callback), 200);
-    }
+  // Queue for camera events that arrive before Cesium is ready
+  let pendingEvents = [];
+  let cesiumReady = false;
+
+  function handleCameraChange(camera) {
+    const { x, y, z } = camera.position;
+    const wgs = crsToWgs84(x, y);
+    if (!wgs) return;
+    log(`→ (${wgs.lat.toFixed(5)}°, ${wgs.lon.toFixed(5)}°)`);
+    flyTo(wgs.lon, wgs.lat, z);
+  }
+
+  function connectStreamBIM() {
+    const dot = document.getElementById('conn-dot');
+    document.getElementById('conn-label').textContent = 'Connecting…';
+
+    window.StreamBIM.connect({
+      cameraChanged: function(camera) {
+        if (!camera?.position) return;
+        // Queue event if Cesium not ready yet
+        if (!cesiumReady) { pendingEvents.push(camera); return; }
+        handleCameraChange(camera);
+      },
+      pickedObject: function(result) {
+        if (!result?.point || !cesiumReady) return;
+        const wgs = crsToWgs84(result.point.x, result.point.y);
+        if (!wgs) return;
+        log(`Picked → (${wgs.lat.toFixed(5)}°, ${wgs.lon.toFixed(5)}°)`, 'success');
+        flyTo(wgs.lon, wgs.lat, result.point.z);
+      }
+    })
+    .then(() => {
+      dot.className = 'status-dot connected';
+      document.getElementById('conn-label').textContent = 'Connected';
+      log('StreamBIM connected ✓', 'success');
+    })
+    .catch(() => {
+      dot.className = 'status-dot error';
+      document.getElementById('conn-label').textContent = 'Not in StreamBIM';
+      log('Not running inside StreamBIM', 'warn');
+    });
   }
 
   function startWidget(simMode) {
@@ -426,19 +427,26 @@
     document.getElementById('live-epsg').value = currentEPSG;
     document.getElementById('setup-overlay').classList.add('hidden');
 
-    waitForCesium(() => {
-      initCesium();
-      if (simMode) {
-        document.getElementById('conn-dot').className = 'status-dot error';
-        document.getElementById('conn-label').textContent = 'Simulation mode';
-        log(`CRS: ${currentEPSG} — simulation mode`, 'warn');
-        setTimeout(runSimulation, 1000);
-      } else {
-        log(`CRS: ${currentEPSG}`);
-        connectStreamBIM();
-      }
-    });
+    initCesium();
+    cesiumReady = true;
+
+    // Flush any camera events that arrived before Cesium was ready
+    pendingEvents.forEach(handleCameraChange);
+    pendingEvents = [];
+
+    if (simMode) {
+      document.getElementById('conn-dot').className = 'status-dot error';
+      document.getElementById('conn-label').textContent = 'Simulation mode';
+      log(`CRS: ${currentEPSG} — simulation mode`, 'warn');
+      setTimeout(runSimulation, 1000);
+    } else {
+      log(`CRS: ${currentEPSG}`);
+    }
   }
+
+  // Connect to StreamBIM immediately on page load so the Penpal
+  // handshake completes within the 5s timeout — before Cesium finishes loading
+  window.addEventListener('load', connectStreamBIM);
 </script>
 
 
