@@ -26,11 +26,13 @@
     window.StreamBIM.connect({
       cameraChanged: function(cam) {
         if (!cam || !cam.position) return;
-        // Flash status so user can see data is flowing
         var el = document.getElementById('conn-status');
-        if (el && el.textContent !== '● Connected') {
-          el.textContent = '● Connected'; el.style.color = '#00ff9d';
-        }
+        if (el) { el.textContent = '● Connected'; el.style.color = '#00ff9d'; }
+        // Show raw incoming coordinates for debugging
+        document.getElementById('v-lat').textContent = 'X:' + cam.position.x.toFixed(1);
+        document.getElementById('v-lon').textContent = 'Y:' + cam.position.y.toFixed(1);
+        document.getElementById('v-alt').textContent = 'Z:' + cam.position.z.toFixed(1);
+        document.getElementById('coords').style.display = 'block';
         if (!window._sbState.ready) {
           window._sbState.pending.push({ type: 'cam', d: cam });
           return;
