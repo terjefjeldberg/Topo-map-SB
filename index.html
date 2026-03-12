@@ -25,14 +25,18 @@
     // Connect immediately — synchronously, before any other scripts or DOM
     window.StreamBIM.connect({
       cameraChanged: function(cam) {
-        if (!cam || !cam.position) return;
+        // Dump the entire camera object so we can see its structure
         var el = document.getElementById('conn-status');
         if (el) { el.textContent = '● Connected'; el.style.color = '#00ff9d'; }
-        // Show raw incoming coordinates for debugging
-        document.getElementById('v-lat').textContent = 'X:' + cam.position.x.toFixed(1);
-        document.getElementById('v-lon').textContent = 'Y:' + cam.position.y.toFixed(1);
-        document.getElementById('v-alt').textContent = 'Z:' + cam.position.z.toFixed(1);
-        document.getElementById('coords').style.display = 'block';
+        var coords = document.getElementById('coords');
+        var vl = document.getElementById('v-lat');
+        var vn = document.getElementById('v-lon');
+        var va = document.getElementById('v-alt');
+        if (coords) coords.style.display = 'block';
+        if (vl) vl.textContent = JSON.stringify(cam).slice(0, 80);
+        if (vn) vn.textContent = '';
+        if (va) va.textContent = '';
+        if (!cam) return;
         if (!window._sbState.ready) {
           window._sbState.pending.push({ type: 'cam', d: cam });
           return;
