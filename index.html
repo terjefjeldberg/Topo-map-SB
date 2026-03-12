@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<!-- saved from url=(0061)file:///C:/Users/terje/Downloads/streambim-topo-widget_4.html -->
+<!-- saved from url=(0061)file:///C:/Users/terje/Downloads/streambim-topo-widget_5.html -->
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>StreamBIM · Topographic Map</title>
 
-  <script src="./index_files/Cesium.js.last ned"></script>
   <link href="./index_files/widgets.css" rel="stylesheet">
-  <script src="./index_files/streambim-widget-api.min.js.last ned"></script>
+  <script src="./index_files/Cesium.js.last ned"></script>
   <script src="./index_files/proj4.js.last ned"></script>
+  <script src="./index_files/streambim-widget-api.min.js.last ned"></script>
 
   <style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700&display=swap');
@@ -412,21 +412,32 @@
     }, 1400);
   }
 
+  function waitForCesium(callback) {
+    if (typeof Cesium !== 'undefined') {
+      callback();
+    } else {
+      log('Waiting for Cesium to load…', 'warn');
+      setTimeout(() => waitForCesium(callback), 200);
+    }
+  }
+
   function startWidget(simMode) {
     currentEPSG = document.getElementById('init-epsg').value.trim() || 'EPSG:25832';
     document.getElementById('live-epsg').value = currentEPSG;
     document.getElementById('setup-overlay').classList.add('hidden');
-    initCesium();
 
-    if (simMode) {
-      document.getElementById('conn-dot').className = 'status-dot error';
-      document.getElementById('conn-label').textContent = 'Simulation mode';
-      log(`CRS: ${currentEPSG} — simulation mode`, 'warn');
-      setTimeout(runSimulation, 1000);
-    } else {
-      log(`CRS: ${currentEPSG}`);
-      connectStreamBIM();
-    }
+    waitForCesium(() => {
+      initCesium();
+      if (simMode) {
+        document.getElementById('conn-dot').className = 'status-dot error';
+        document.getElementById('conn-label').textContent = 'Simulation mode';
+        log(`CRS: ${currentEPSG} — simulation mode`, 'warn');
+        setTimeout(runSimulation, 1000);
+      } else {
+        log(`CRS: ${currentEPSG}`);
+        connectStreamBIM();
+      }
+    });
   }
 </script>
 
