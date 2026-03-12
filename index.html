@@ -25,18 +25,24 @@
     // Connect immediately — synchronously, before any other scripts or DOM
     window.StreamBIM.connect({
       cameraChanged: function(cam) {
-        // Dump the entire camera object so we can see its structure
         var el = document.getElementById('conn-status');
         if (el) { el.textContent = '● Connected'; el.style.color = '#00ff9d'; }
-        var coords = document.getElementById('coords');
-        var vl = document.getElementById('v-lat');
-        var vn = document.getElementById('v-lon');
-        var va = document.getElementById('v-alt');
-        if (coords) coords.style.display = 'block';
-        if (vl) vl.textContent = JSON.stringify(cam).slice(0, 80);
-        if (vn) vn.textContent = '';
-        if (va) va.textContent = '';
         if (!cam) return;
+        // Normalise: position can be array [x,y,z] or object {x,y,z}
+        var pos = cam.position;
+        if (Array.isArray(pos)) {
+          cam.position = { x: pos[0], y: pos[1], z: pos[2] };
+        }
+        var quat = cam.quaternion || cam.orientation;
+        if (Array.isArray(quat)) {
+          cam.orientation = { x: quat[0], y: quat[1], z: quat[2], w: quat[3] };
+        }
+        // Show raw CRS coords for debug
+        var coords = document.getElementById('coords');
+        if (coords) coords.style.display = 'block';
+        document.getElementById('v-lat').textContent = 'X: ' + cam.position.x.toFixed(2);
+        document.getElementById('v-lon').textContent = 'Y: ' + cam.position.y.toFixed(2);
+        document.getElementById('v-alt').textContent = 'Z: ' + cam.position.z.toFixed(2);
         if (!window._sbState.ready) {
           window._sbState.pending.push({ type: 'cam', d: cam });
           return;
@@ -383,9 +389,15 @@
   }
 
   window._onCamera = function(cam) {
+    // Normalise array format just in case
+    if (Array.isArray(cam.position)) {
+      cam.position = { x: cam.position[0], y: cam.position[1], z: cam.position[2] };
+    }
     var w = toWgs84(cam.position.x, cam.position.y);
     if (!w) return;
-    var hpr = cam.orientation ? quatToHPR(cam.orientation) : null;
+    var quat = cam.orientation || cam.quaternion;
+    if (Array.isArray(quat)) quat = { x: quat[0], y: quat[1], z: quat[2], w: quat[3] };
+    var hpr = quat ? quatToHPR(quat) : null;
     flyTo(w.lon, w.lat, cam.position.z, hpr);
   };
   window._onPick = function(res) {
