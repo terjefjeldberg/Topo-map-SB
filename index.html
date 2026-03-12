@@ -41,16 +41,12 @@
         // Show raw CRS coords for debug
         var coords = document.getElementById('coords');
         if (coords) coords.style.display = 'block';
-        // Try converting as EPSG:3857
-        var wgs84str = '+proj=longlat +datum=WGS84 +no_defs';
-        var merc = '+proj=merc +a=6378137 +b=6378137 +lat_ts=0 +lon_0=0 +x_0=0 +y_0=0 +k=1 +units=m +no_defs';
-        try {
-          var r3857 = proj4(merc, wgs84str, [cam.position.x, cam.position.y]);
-          document.getElementById('v-lat').textContent = '3857: ' + r3857[1].toFixed(4) + ',' + r3857[0].toFixed(4);
-        } catch(e) { document.getElementById('v-lat').textContent = 'err: ' + e.message; }
-        // Show raw X,Y
-        document.getElementById('v-lon').textContent = 'raw: ' + cam.position.x.toFixed(0) + ',' + cam.position.y.toFixed(0);
-        document.getElementById('v-alt').textContent = 'Z: ' + cam.position.z.toFixed(1) + ' m';
+        // Show raw array values BEFORE any conversion
+        var rawPos = Array.isArray(cam.position) ? cam.position : [cam.position.x, cam.position.y, cam.position.z];
+        document.getElementById('coords').style.display = 'block';
+        document.getElementById('v-lat').textContent = 'p[0]=' + rawPos[0];
+        document.getElementById('v-lon').textContent = 'p[1]=' + rawPos[1];
+        document.getElementById('v-alt').textContent = 'p[2]=' + rawPos[2];
         if (!window._sbState.ready) {
           window._sbState.pending.push({ type: 'cam', d: cam });
           return;
