@@ -41,9 +41,12 @@
         // Show raw CRS coords for debug
         var coords = document.getElementById('coords');
         if (coords) coords.style.display = 'block';
-        document.getElementById('v-lat').textContent = 'E: ' + cam.position.x.toFixed(0) + ' m';
-        document.getElementById('v-lon').textContent = 'N: ' + cam.position.y.toFixed(0) + ' m';
-        document.getElementById('v-alt').textContent = 'H: ' + cam.position.z.toFixed(1) + ' m';
+        var dbgW = toWgs84(cam.position.x, cam.position.y);
+        if (dbgW) {
+          document.getElementById('v-lat').textContent = dbgW.lat.toFixed(6) + '°';
+          document.getElementById('v-lon').textContent = dbgW.lon.toFixed(6) + '°';
+        }
+        document.getElementById('v-alt').textContent = cam.position.z.toFixed(1) + ' m';
         if (!window._sbState.ready) {
           window._sbState.pending.push({ type: 'cam', d: cam });
           return;
@@ -367,7 +370,8 @@
   function toWgs84(easting, northing) {
     try {
       var r = proj4(S.epsg, 'EPSG:4326', [easting, northing]);
-      return { lon: r[0], lat: r[1] };
+      // proj4 with NTM/Norwegian CRS returns [lat, lon] not [lon, lat] — swap
+      return { lon: r[1], lat: r[0] };
     } catch(e) { return null; }
   }
 
