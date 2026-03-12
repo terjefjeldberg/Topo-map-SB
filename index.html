@@ -41,8 +41,8 @@
         // Show raw CRS coords for debug
         var coords = document.getElementById('coords');
         if (coords) coords.style.display = 'block';
-        document.getElementById('v-lat').textContent = 'E: ' + cam.position.x.toFixed(1) + ' m';
-        document.getElementById('v-lon').textContent = 'N: ' + cam.position.y.toFixed(1) + ' m';
+        document.getElementById('v-lat').textContent = 'E: ' + cam.position.x.toFixed(0) + ' m';
+        document.getElementById('v-lon').textContent = 'N: ' + cam.position.y.toFixed(0) + ' m';
         document.getElementById('v-alt').textContent = 'H: ' + cam.position.z.toFixed(1) + ' m';
         if (!window._sbState.ready) {
           window._sbState.pending.push({ type: 'cam', d: cam });
@@ -333,10 +333,23 @@
       .catch(function(e){ cb(e.message); });
   }
 
-  function toWgs84(x, y) {
+  function toWgs84(easting, northing) {
     try {
-      var r = proj4(S.epsg, 'EPSG:4326', [x, y]);
-      return { lon: r[0], lat: r[1] };
+      var r = proj4(S.epsg, 'EPSG:4326', [easting, northing]);
+      // proj4 for geographic CRS returns [longitude, latitude]
+      // but some CRS definitions (especially Nordic) return [latitude, longitude]
+      // Detect by checking if first value is in longitude range (-180..180)
+      // and second in latitude range (-90..90)
+      var a = r[0], b = r[1];
+      var lon, lat;
+      if (Math.abs(b) <= 90 && Math.abs(a) <= 180) {
+        lon = a; lat = b;
+      } else {
+        // Swapped
+        lon = b; lat = a;
+      }
+      // Sanity check — Norway is roughly lat 57-71, lon 4-31
+      return { lon: lon, lat: lat };
     } catch(e) { return null; }
   }
 
@@ -376,8 +389,11 @@
       roll: 0
     };
 
+    // alt is camera height in metres — if negative or tiny, use a minimum viewing height
+    var camHeight = (alt && Math.abs(alt) < 50000) ? alt : 0;
+    var viewHeight = Math.max(camHeight + 50, 100);
     S.viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(lon, lat, (alt||0) + 2),
+      destination: Cesium.Cartesian3.fromDegrees(lon, lat, viewHeight),
       orientation: orientation,
       duration: S.lastPos ? 0.4 : 2.0,
       easingFunction: Cesium.EasingFunction.LINEAR_NONE
