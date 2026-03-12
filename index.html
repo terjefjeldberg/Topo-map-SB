@@ -327,6 +327,10 @@
       .then(function(r){ return r.text(); })
       .then(function(def){
         if (!def || def.indexOf('+proj') === -1) { cb('Unknown EPSG: ' + epsg); return; }
+        // Ensure axis order is Easting,Northing for projected CRS
+        if (def.indexOf('+axis') === -1 && def.indexOf('+proj=longlat') === -1) {
+          def = def + ' +axis=enu';
+        }
         proj4.defs(epsg, def);
         cb(null);
       })
@@ -335,20 +339,17 @@
 
   function toWgs84(easting, northing) {
     try {
-      var r = proj4(S.epsg, 'EPSG:4326', [easting, northing]);
-      // proj4 for geographic CRS returns [longitude, latitude]
-      // but some CRS definitions (especially Nordic) return [latitude, longitude]
-      // Detect by checking if first value is in longitude range (-180..180)
-      // and second in latitude range (-90..90)
-      var a = r[0], b = r[1];
-      var lon, lat;
-      if (Math.abs(b) <= 90 && Math.abs(a) <= 180) {
-        lon = a; lat = b;
-      } else {
-        // Swapped
-        lon = b; lat = a;
+      // Always convert via WGS84 using explicit +axis definition
+      // proj4 always returns [lon, lat] for EPSG:4326
+      // But NTM/UTM source CRS have [Easting, Northing] input
+      var wgs84 = '+proj=longlat +datum=WGS84 +no_defs';
+      var r = proj4(S.epsg, wgs84, [easting, northing]);
+      var lon = r[0], lat = r[1];
+      // If result is clearly wrong (not geographic range), try swapped input
+      if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+        r = proj4(S.epsg, wgs84, [northing, easting]);
+        lon = r[0]; lat = r[1];
       }
-      // Sanity check — Norway is roughly lat 57-71, lon 4-31
       return { lon: lon, lat: lat };
     } catch(e) { return null; }
   }
