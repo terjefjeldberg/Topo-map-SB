@@ -31,18 +31,19 @@
         // Normalise: position can be array [x,y,z] or object {x,y,z}
         var pos = cam.position;
         if (Array.isArray(pos)) {
+          // IFC array: [Easting, Northing, Height]
           cam.position = { x: pos[0], y: pos[1], z: pos[2] };
         }
         var quat = cam.quaternion || cam.orientation;
-        if (Array.isArray(quat)) {
+        if (quat && Array.isArray(quat)) {
           cam.orientation = { x: quat[0], y: quat[1], z: quat[2], w: quat[3] };
         }
         // Show raw CRS coords for debug
         var coords = document.getElementById('coords');
         if (coords) coords.style.display = 'block';
-        document.getElementById('v-lat').textContent = 'X: ' + cam.position.x.toFixed(2);
-        document.getElementById('v-lon').textContent = 'Y: ' + cam.position.y.toFixed(2);
-        document.getElementById('v-alt').textContent = 'Z: ' + cam.position.z.toFixed(2);
+        document.getElementById('v-lat').textContent = 'E: ' + cam.position.x.toFixed(1) + ' m';
+        document.getElementById('v-lon').textContent = 'N: ' + cam.position.y.toFixed(1) + ' m';
+        document.getElementById('v-alt').textContent = 'H: ' + cam.position.z.toFixed(1) + ' m';
         if (!window._sbState.ready) {
           window._sbState.pending.push({ type: 'cam', d: cam });
           return;
@@ -389,10 +390,10 @@
   }
 
   window._onCamera = function(cam) {
-    // Normalise array format just in case
     if (Array.isArray(cam.position)) {
       cam.position = { x: cam.position[0], y: cam.position[1], z: cam.position[2] };
     }
+    // x=Easting, y=Northing — correct order for proj4
     var w = toWgs84(cam.position.x, cam.position.y);
     if (!w) return;
     var quat = cam.orientation || cam.quaternion;
