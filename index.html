@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<!-- saved from url=(0061)file:///C:/Users/terje/Downloads/streambim-topo-widget_1.html -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StreamBIM · Topographic Map</title>
+
+  <!-- CesiumJS -->
+  <script src="./index_files/Cesium.js.last ned"></script>
+  <link href="./index_files/widgets.css" rel="stylesheet">
+
+  <!-- StreamBIM Widget API (CDN) -->
+  <script src="./index_files/streambim-widget-api.min.js.last ned"></script>
+
+  <!-- proj4js for CRS reprojection -->
+  <script src="./index_files/proj4.js.last ned"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0e13;
+      --panel: #111720;
+      --panel-border: #1e2d3d;
+      --accent: #00d4ff;
+      --accent2: #00ff9d;
+      --warn: #ff6b35;
+      --text: #c8d8e8;
+      --text-dim: #5a7a94;
+      --text-bright: #eaf4ff;
+      --radius: 6px;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      overflow: hidden;
+    }
+
+    /* ── Layout ── */
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    #header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--panel-border);
+      flex-shrink: 0;
+      z-index: 10;
+    }
+
+    .logo-mark {
+      width: 28px;
+      height: 28px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    #header h1 {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-bright);
+    }
+
+    #status-bar {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--text-dim);
+      transition: background 0.4s, box-shadow 0.4s;
+    }
+    .status-dot.connected {
+      background: var(--accent2);
+      box-shadow: 0 0 8px var(--accent2);
+      animation: pulse 2s infinite;
+    }
+    .status-dot.error { background: var(--warn); }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    #main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Cesium map ── */
+    #cesium-container {
+      flex: 1;
+      position: relative;
+    }
+
+    #cesiumViewport {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ── Side panel ── */
+    #side-panel {
+      width: 260px;
+      flex-shrink: 0;
+      background: var(--panel);
+      border-left: 1px solid var(--panel-border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-section {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--panel-border);
+    }
+
+    .panel-label {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 10px;
+    }
+
+    /* Coordinate readout */
+    .coord-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 6px;
+    }
+    .coord-key {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      color: var(--text-dim);
+      min-width: 36px;
+    }
+    .coord-val {
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      color: var(--accent);
+      text-align: right;
+      flex: 1;
+    }
+
+    /* CRS Config */
+    .config-row {
+      margin-bottom: 10px;
+    }
+    .config-row label {
+      display: block;
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-bottom: 4px;
+      letter-spacing: 0.05em;
+    }
+    .config-row input, .config-row select {
+      width: 100%;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius);
+      color: var(--text-bright);
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      padding: 6px 8px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .config-row input:focus, .config-row select:focus {
+      border-color: var(--accent);
+    }
+
+    .btn {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid var(--accent);
+      background: transparent;
+      color: var(--accent);
+      font-family: 'Syne', sans-serif;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+      margin-top: 4px;
+    }
+    .btn:hover {
+      background: var(--accent);
+      color: var(--bg);
+    }
+    .btn.secondary {
+      border-color: var(--text-dim);
+      color: var(--text-dim);
+    }
+    .btn.secondary:hover {
+      background: var(--text-dim);
+      color: var(--bg);
+    }
+
+    /* Log */
+    #log {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    #log::-webkit-scrollbar { width: 4px; }
+    #log::-webkit-scrollbar-track { background: transparent; }
+    #log::-webkit-scrollbar-thumb { background: var(--panel-border); border-radius: 2px; }
+
+    .log-entry {
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      color: var(--text-dim);
+      line-height: 1.5;
+      padding: 3px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .log-entry.info { color: var(--text); }
+    .log-entry.success { color: var(--accent2); }
+    .log-entry.warn { color: var(--warn); }
+
+    .log-time {
+      color: var(--text-dim);
+      margin-right: 6px;
+      opacity: 0.6;
+    }
+
+    /* Marker crosshair overlay */
+    #marker {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    #marker.visible { opacity: 1; }
+    .crosshair-ring {
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--accent);
+      border-radius: 50%;
+      box-shadow: 0 0 12px var(--accent);
+      animation: ring-pulse 1.5s ease-out forwards;
+    }
+    @keyframes ring-pulse {
+      0% { transform: scale(0.5); opacity: 1; }
+      100% { transform: scale(2); opacity: 0; }
+    }
+
+    /* Setup overlay */
+    #setup-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(10,14,19,0.92);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      backdrop-filter: blur(4px);
+    }
+    #setup-overlay.hidden { display: none; }
+
+    .setup-card {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      padding: 28px 32px;
+      width: 380px;
+      max-width: 90vw;
+    }
+    .setup-card h2 {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-bright);
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+    .setup-card p {
+      font-size: 11px;
+      color: var(--text-dim);
+      line-height: 1.7;
+      margin-bottom: 18px;
+    }
+
+    .crs-presets {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .preset-btn {
+      padding: 4px 10px;
+      font-size: 10px;
+      font-family: 'DM Mono', monospace;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--panel-border);
+      border-radius: 4px;
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .preset-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .accent-text { color: var(--accent); }
+  </style>
+</head>
+<body>
+
+<div id="app">
+  <div id="header">
+    <div class="logo-mark">🗺</div>
+    <h1>StreamBIM · Topographic Map</h1>
+    <div id="status-bar">
+      <div class="status-pill">
+        <div class="status-dot" id="conn-dot"></div>
+        <span id="conn-label">Awaiting connection</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="main">
+    <div id="cesium-container">
+      <div id="cesiumViewport"></div>
+      <div id="marker"><div class="crosshair-ring"></div></div>
+    </div>
+
+    <div id="side-panel">
+      <!-- Live coordinates -->
+      <div class="panel-section">
+        <div class="panel-label">Live Position</div>
+        <div class="coord-row">
+          <span class="coord-key">LAT</span>
+          <span class="coord-val" id="val-lat">—</span>
+        </div>
+        <div class="coord-row">
+          <span class="coord-key">LON</span>
+          <span class="coord-val" id="val-lon">—</span>
+        </div>
+        <div class="coord-row">
+          <span class="coord-key">ALT</span>
+          <span class="coord-val" id="val-alt">—</span>
+        </div>
+        <div class="coord-row" style="margin-top:8px">
+          <span class="coord-key" style="font-size:9px">IFC X</span>
+          <span class="coord-val" style="font-size:10px;color:var(--text-dim)" id="val-ifcx">—</span>
+        </div>
+        <div class="coord-row">
+          <span class="coord-key" style="font-size:9px">IFC Y</span>
+          <span class="coord-val" style="font-size:10px;color:var(--text-dim)" id="val-ifcy">—</span>
+        </div>
+      </div>
+
+      <!-- CRS Config (collapsed in side panel after setup) -->
+      <div class="panel-section">
+        <div class="panel-label">CRS Settings</div>
+        <div class="config-row">
+          <label>EPSG Code (your project CRS)</label>
+          <input type="text" id="sp-epsg" value="EPSG:25832" placeholder="e.g. EPSG:25832">
+        </div>
+        <div class="config-row">
+          <label>Map Conversion — Easting offset (E)</label>
+          <input type="number" id="sp-east" value="0" placeholder="IfcMapConversion.Eastings">
+        </div>
+        <div class="config-row">
+          <label>Northing offset (N)</label>
+          <input type="number" id="sp-north" value="0" placeholder="IfcMapConversion.Northings">
+        </div>
+        <div class="config-row">
+          <label>Rotation angle (degrees, +CCW)</label>
+          <input type="number" id="sp-rotation" value="0" step="0.001" placeholder="True North offset">
+        </div>
+        <div class="config-row">
+          <label>Scale factor</label>
+          <input type="number" id="sp-scale" value="1" step="0.0001">
+        </div>
+        <button class="btn" onclick="applyConfig()">Apply Config</button>
+      </div>
+
+      <!-- Log -->
+      <div class="panel-label" style="padding:12px 16px 0">Event Log</div>
+      <div id="log"><div class="log-entry info"><span class="log-time">09:53:02</span>Widget loaded. Configure your CRS and connect.</div><div class="log-entry warn"><span class="log-time">09:53:02</span>Tip: Get a free Cesium ion token at cesium.com/ion</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Setup overlay -->
+<div id="setup-overlay">
+  <div class="setup-card">
+    <h2>Configure your georeferencing</h2>
+    <p>
+      Enter your StreamBIM project's coordinate reference system. These values come from <span class="accent-text">IfcMapConversion</span> in your IFC file, or from StreamBIM's project settings under CRS.
+    </p>
+
+    <div class="config-row">
+      <label>Project CRS (EPSG code)</label>
+      <input type="text" id="init-epsg" value="EPSG:25832" placeholder="e.g. EPSG:25832, EPSG:25833">
+    </div>
+
+    <div class="panel-label" style="margin-bottom:6px">Common presets</div>
+    <div class="crs-presets">
+      <div class="preset-btn" onclick="setPreset(&#39;EPSG:25832&#39;)">UTM 32N</div>
+      <div class="preset-btn" onclick="setPreset(&#39;EPSG:25833&#39;)">UTM 33N</div>
+      <div class="preset-btn" onclick="setPreset(&#39;EPSG:27700&#39;)">BNG (UK)</div>
+      <div class="preset-btn" onclick="setPreset(&#39;EPSG:2056&#39;)">CH1903+</div>
+      <div class="preset-btn" onclick="setPreset(&#39;EPSG:3006&#39;)">SWEREF99</div>
+      <div class="preset-btn" onclick="setPreset(&#39;EPSG:32632&#39;)">WGS84 32N</div>
+    </div>
+
+    <div class="config-row">
+      <label>Easting offset — IfcMapConversion.Eastings (metres)</label>
+      <input type="number" id="init-east" value="0" placeholder="0">
+    </div>
+    <div class="config-row">
+      <label>Northing offset — IfcMapConversion.Northings (metres)</label>
+      <input type="number" id="init-north" value="0" placeholder="0">
+    </div>
+    <div class="config-row">
+      <label>True North rotation offset (degrees, CCW positive)</label>
+      <input type="number" id="init-rotation" value="0" step="0.001">
+    </div>
+    <div class="config-row">
+      <label>Scale (usually 1.0)</label>
+      <input type="number" id="init-scale" value="1" step="0.0001">
+    </div>
+
+    <button class="btn" onclick="startWidget()">Connect to StreamBIM</button>
+  </div>
+</div>
+
+<script>
+  // ── State ──────────────────────────────────────────────────────────────
+  let viewer = null;
+  let cameraMarkerEntity = null;
+  let config = {
+    epsg: 'EPSG:25832',
+    eastings: 0,
+    northings: 0,
+    rotation: 0,   // degrees, CCW positive
+    scale: 1
+  };
+  let lastLonLat = null;
+
+  // ── Logging ────────────────────────────────────────────────────────────
+  function log(msg, type = 'info') {
+    const el = document.getElementById('log');
+    const now = new Date();
+    const ts = now.toTimeString().slice(0, 8);
+    const entry = document.createElement('div');
+    entry.className = `log-entry ${type}`;
+    entry.innerHTML = `<span class="log-time">${ts}</span>${msg}`;
+    el.appendChild(entry);
+    el.scrollTop = el.scrollHeight;
+    // Keep log trimmed
+    while (el.children.length > 60) el.removeChild(el.firstChild);
+  }
+
+  // ── CRS preset selector ───────────────────────────────────────────────
+  function setPreset(epsg) {
+    document.getElementById('init-epsg').value = epsg;
+    document.getElementById('sp-epsg').value = epsg;
+  }
+
+  // ── Config apply ───────────────────────────────────────────────────────
+  function applyConfig() {
+    config.epsg     = document.getElementById('sp-epsg').value.trim() || config.epsg;
+    config.eastings = parseFloat(document.getElementById('sp-east').value) || 0;
+    config.northings= parseFloat(document.getElementById('sp-north').value) || 0;
+    config.rotation = parseFloat(document.getElementById('sp-rotation').value) || 0;
+    config.scale    = parseFloat(document.getElementById('sp-scale').value) || 1;
+    log(`Config updated → ${config.epsg}, E:${config.eastings} N:${config.northings}`, 'success');
+  }
+
+  // ── Coordinate conversion ──────────────────────────────────────────────
+  // IFC local (x,y,z) → project CRS (easting, northing) → WGS84 (lon, lat)
+  function ifcToWgs84(ifcX, ifcY) {
+    const rad = config.rotation * Math.PI / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+
+    // Apply scale + rotation + translation
+    const localX = ifcX * config.scale;
+    const localY = ifcY * config.scale;
+
+    const easting  = config.eastings + cos * localX - sin * localY;
+    const northing = config.northings + sin * localX + cos * localY;
+
+    // Reproject from project CRS to WGS84
+    try {
+      const [lon, lat] = proj4(config.epsg, 'EPSG:4326', [easting, northing]);
+      return { lon, lat, easting, northing };
+    } catch(e) {
+      log(`proj4 error: ${e.message}`, 'warn');
+      return null;
+    }
+  }
+
+  // ── Cesium init ────────────────────────────────────────────────────────
+  function initCesium() {
+    // Use free Ion token — users can replace with their own
+    Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlYWE1OWUxNy1mMWZiLTQzYjYtYTQ0OS1kMWFjYmFkNTc1YTgiLCJpZCI6NTc3MzMsImlhdCI6MTYyMjY0NDE1N30.XcKpgANiY19MC4bdFd3a-5qFOeKa7uCmRSBN7MzL5yE';
+
+    viewer = new Cesium.Viewer('cesiumViewport', {
+      terrainProvider: Cesium.createWorldTerrain({
+        requestWaterMask: true,
+        requestVertexNormals: true
+      }),
+      baseLayerPicker: false,
+      geocoder: false,
+      homeButton: false,
+      sceneModePicker: false,
+      navigationHelpButton: false,
+      animation: false,
+      timeline: false,
+      fullscreenButton: false,
+      infoBox: false,
+      selectionIndicator: false,
+      skyBox: false,
+      skyAtmosphere: new Cesium.SkyAtmosphere(),
+      imageryProvider: new Cesium.IonImageryProvider({ assetId: 2 }) // Bing Aerial
+    });
+
+    viewer.scene.globe.enableLighting = true;
+    viewer.scene.globe.depthTestAgainstTerrain = true;
+
+    // Camera position marker entity
+    cameraMarkerEntity = viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(0, 0, 0),
+      ellipse: {
+        semiMinorAxis: 6,
+        semiMajorAxis: 6,
+        material: new Cesium.ColorMaterialProperty(
+          Cesium.Color.fromCssColorString('#00d4ff').withAlpha(0.85)
+        ),
+        outline: true,
+        outlineColor: Cesium.Color.WHITE.withAlpha(0.6),
+        outlineWidth: 2,
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
+      },
+      label: {
+        text: '📍 You',
+        font: '12px Syne',
+        fillColor: Cesium.Color.fromCssColorString('#eaf4ff'),
+        outlineColor: Cesium.Color.BLACK,
+        outlineWidth: 2,
+        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+        verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+        pixelOffset: new Cesium.Cartesian2(0, -14),
+        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
+      },
+      show: false
+    });
+
+    log('CesiumJS terrain viewer initialised', 'success');
+  }
+
+  // ── Move Cesium camera to lon/lat ──────────────────────────────────────
+  function flyToPosition(lon, lat, alt) {
+    if (!viewer) return;
+
+    const cartesian = Cesium.Cartesian3.fromDegrees(lon, lat);
+
+    // Update marker
+    cameraMarkerEntity.position = cartesian;
+    cameraMarkerEntity.show = true;
+
+    // Fly camera overhead (smooth, not instant on first call)
+    if (!lastLonLat) {
+      viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(lon, lat, Math.max(alt + 300, 400)),
+        orientation: { heading: 0, pitch: Cesium.Math.toRadians(-60), roll: 0 },
+        duration: 1.5
+      });
+    } else {
+      viewer.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(lon, lat, Math.max(alt + 300, 400)),
+        orientation: { heading: 0, pitch: Cesium.Math.toRadians(-60), roll: 0 },
+        duration: 0.8,
+        easingFunction: Cesium.EasingFunction.QUADRATIC_OUT
+      });
+    }
+
+    lastLonLat = { lon, lat };
+
+    // Pulse crosshair
+    const marker = document.getElementById('marker');
+    marker.innerHTML = '<div class="crosshair-ring"></div>';
+    marker.classList.add('visible');
+    setTimeout(() => marker.classList.remove('visible'), 1500);
+
+    // Update readouts
+    document.getElementById('val-lat').textContent = lat.toFixed(6) + '°';
+    document.getElementById('val-lon').textContent = lon.toFixed(6) + '°';
+    document.getElementById('val-alt').textContent = alt.toFixed(1) + ' m';
+  }
+
+  // ── StreamBIM connect ──────────────────────────────────────────────────
+  function connectStreamBIM() {
+    const dot   = document.getElementById('conn-dot');
+    const label = document.getElementById('conn-label');
+    dot.className = 'status-dot';
+    label.textContent = 'Connecting…';
+    log('Attempting StreamBIM connection…');
+
+    const methods = {
+      cameraChanged: function(camera) {
+        // camera.position: { x, y, z } in IFC/BCF local coordinates (metres)
+        // camera.orientation: quaternion
+        if (!camera || !camera.position) return;
+
+        const { x, y, z } = camera.position;
+        document.getElementById('val-ifcx').textContent = x.toFixed(2) + ' m';
+        document.getElementById('val-ifcy').textContent = y.toFixed(2) + ' m';
+
+        const result = ifcToWgs84(x, y);
+        if (!result) return;
+
+        log(`Cam → IFC(${x.toFixed(1)}, ${y.toFixed(1)}) → WGS84(${result.lat.toFixed(5)}, ${result.lon.toFixed(5)})`);
+        flyToPosition(result.lon, result.lat, z);
+      },
+
+      pickedObject: function(result) {
+        if (!result || !result.point) return;
+        const { x, y, z } = result.point;
+        const geo = ifcToWgs84(x, y);
+        if (!geo) return;
+        log(`Object picked → (${geo.lat.toFixed(5)}, ${geo.lon.toFixed(5)})`, 'success');
+
+        // Zoom to picked point briefly
+        viewer.camera.flyTo({
+          destination: Cesium.Cartesian3.fromDegrees(geo.lon, geo.lat, Math.max(z + 100, 150)),
+          orientation: { heading: 0, pitch: Cesium.Math.toRadians(-45), roll: 0 },
+          duration: 1.2
+        });
+      }
+    };
+
+    window.StreamBIM.connect(methods)
+      .then(function() {
+        dot.className = 'status-dot connected';
+        label.textContent = 'Connected';
+        log('StreamBIM connected ✓', 'success');
+      })
+      .catch(function(err) {
+        dot.className = 'status-dot error';
+        label.textContent = 'Not in StreamBIM';
+        log('Not running inside StreamBIM — use simulation below', 'warn');
+        enableSimulation();
+      });
+  }
+
+  // ── Demo simulation (when not inside StreamBIM) ───────────────────────
+  function enableSimulation() {
+    log('Simulation mode enabled — click "Simulate Walk" to test', 'warn');
+
+    // Add simulate button to panel
+    const sec = document.querySelector('.panel-section');
+    const btn = document.createElement('button');
+    btn.className = 'btn secondary';
+    btn.style.marginTop = '10px';
+    btn.textContent = 'Simulate Camera Walk';
+    btn.onclick = runSimulation;
+    sec.appendChild(btn);
+  }
+
+  function runSimulation() {
+    // Simulate walking around a georeferenced building
+    // Using UTM 32N coords near Oslo as example
+    const points = [
+      { x: 10, y: 10, z: 15 },
+      { x: 25, y: 12, z: 15 },
+      { x: 40, y: 15, z: 12 },
+      { x: 50, y: 30, z: 10 },
+      { x: 45, y: 50, z: 10 },
+      { x: 20, y: 55, z: 13 },
+      { x: 5, y: 40, z: 15 },
+      { x: 10, y: 10, z: 15 },
+    ];
+    let i = 0;
+    const interval = setInterval(() => {
+      if (i >= points.length) { clearInterval(interval); return; }
+      const p = points[i++];
+      const result = ifcToWgs84(p.x, p.y);
+      if (!result) return;
+      document.getElementById('val-ifcx').textContent = p.x.toFixed(2) + ' m';
+      document.getElementById('val-ifcy').textContent = p.y.toFixed(2) + ' m';
+      flyToPosition(result.lon, result.lat, p.z);
+      log(`Sim step ${i}: IFC(${p.x}, ${p.y}) → (${result.lat.toFixed(5)}°, ${result.lon.toFixed(5)}°)`);
+    }, 1200);
+  }
+
+  // ── Start ──────────────────────────────────────────────────────────────
+  function startWidget() {
+    // Read initial config
+    config.epsg     = document.getElementById('init-epsg').value.trim() || 'EPSG:25832';
+    config.eastings = parseFloat(document.getElementById('init-east').value) || 0;
+    config.northings= parseFloat(document.getElementById('init-north').value) || 0;
+    config.rotation = parseFloat(document.getElementById('init-rotation').value) || 0;
+    config.scale    = parseFloat(document.getElementById('init-scale').value) || 1;
+
+    // Mirror into side panel fields
+    document.getElementById('sp-epsg').value    = config.epsg;
+    document.getElementById('sp-east').value    = config.eastings;
+    document.getElementById('sp-north').value   = config.northings;
+    document.getElementById('sp-rotation').value= config.rotation;
+    document.getElementById('sp-scale').value   = config.scale;
+
+    // Define CRS in proj4 if not already known
+    // proj4 ships with most EPSG codes built-in via cdnjs
+    // For others, you can add: proj4.defs("EPSG:XXXX", "<proj4 string>")
+    log(`CRS set to ${config.epsg}`, 'info');
+
+    document.getElementById('setup-overlay').classList.add('hidden');
+
+    initCesium();
+    connectStreamBIM();
+  }
+
+  // Minimal Cesium token note
+  window.addEventListener('DOMContentLoaded', () => {
+    log('Widget loaded. Configure your CRS and connect.', 'info');
+    log('Tip: Get a free Cesium ion token at cesium.com/ion', 'warn');
+  });
+</script>
+
+
+</body></html>
