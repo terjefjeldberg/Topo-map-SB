@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- saved from url=(0062)file:///C:/Users/terje/Downloads/streambim-topo-widget_11.html -->
+<!-- saved from url=(0062)file:///C:/Users/terje/Downloads/streambim-topo-widget_12.html -->
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -59,16 +59,25 @@
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
-    html, body, #cesiumViewport {
+    html, body {
       width: 100%; height: 100%;
       overflow: hidden;
       background: #050810;
     }
 
-    /* Cesium fills 100% */
+    #cesiumViewport {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw !important;
+      height: 100vh !important;
+    }
+
     #cesiumViewport .cesium-viewer,
     #cesiumViewport .cesium-viewer-cesiumWidgetContainer,
+    #cesiumViewport .cesium-widget,
     #cesiumViewport canvas {
+      position: absolute !important;
+      top: 0 !important; left: 0 !important;
       width: 100% !important;
       height: 100% !important;
     }
@@ -362,6 +371,9 @@
       show: false
     });
     document.getElementById('loading').classList.remove('show');
+    // Force Cesium to resize canvas to actual window dimensions
+    S.viewer.resize();
+    window.addEventListener('resize', function() { S.viewer.resize(); });
     if (cb) cb();
   }
 
