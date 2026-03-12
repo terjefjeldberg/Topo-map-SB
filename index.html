@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- saved from url=(0061)file:///C:/Users/terje/Downloads/streambim-topo-widget_9.html -->
+<!-- saved from url=(0062)file:///C:/Users/terje/Downloads/streambim-topo-widget_10.html -->
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -54,8 +54,7 @@
     window._log = _log;
   </script>
 
-  <!-- 3. proj4 loads synchronously -->
-  <script src="./index_files/proj4.js.last ned"></script>
+  <!-- proj4 loaded dynamically in startWidget -->
 
   <!-- 4. Cesium CSS only — JS loaded dynamically later so it doesn't block -->
   <link href="./index_files/widgets.css" rel="stylesheet">
@@ -436,20 +435,15 @@
     var epsg = document.getElementById('init-epsg').value.trim() || 'EPSG:25832';
     document.getElementById('setup-overlay').classList.add('hidden');
     document.getElementById('live-epsg').value = epsg;
-    _log('Loading map… CRS: ' + epsg);
+    _log('Loading libraries…');
 
-    // First make sure the EPSG definition is available
-    ensureEPSG(epsg, function(err) {
-      if (err) { _log(err, 'warn'); }
-      currentEPSG = epsg;
-
-      // Dynamically load Cesium JS (doesn't block StreamBIM handshake)
+    // Step 3: init Cesium
+    function loadCesium() {
       var s = document.createElement('script');
       s.src = 'https://cdn.jsdelivr.net/npm/cesium@1.136.0/Build/Cesium/Cesium.js';
       s.onload = function() {
         initCesium(function() {
           _cesiumReady = true;
-          // Flush any queued events
           _pendingEvents.forEach(function(e) {
             if (e.type === 'camera') window._handleCamera(e.data);
             else if (e.type === 'pick') window._handlePick(e.data);
@@ -458,9 +452,25 @@
           if (simMode) { runSimulation(); }
         });
       };
-      s.onerror = function() { _log('Failed to load Cesium JS', 'warn'); };
+      s.onerror = function() { _log('Failed to load Cesium', 'warn'); };
       document.head.appendChild(s);
-    });
+    }
+
+    // Step 2: fetch EPSG definition, then load Cesium
+    function loadEPSG() {
+      currentEPSG = epsg;
+      ensureEPSG(epsg, function(err) {
+        if (err) _log(err, 'warn');
+        loadCesium();
+      });
+    }
+
+    // Step 1: load proj4, then continue
+    var p = document.createElement('script');
+    p.src = 'https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js';
+    p.onload = function() { _log('CRS engine ready', 'success'); loadEPSG(); };
+    p.onerror = function() { _log('Failed to load proj4', 'warn'); };
+    document.head.appendChild(p);
   }
 
   function runSimulation() {
