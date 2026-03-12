@@ -369,10 +369,18 @@
 
   function toWgs84(easting, northing) {
     try {
-      var r = proj4(S.epsg, 'EPSG:4326', [easting, northing]);
-      // For NTM CRS proj4 returns [lat, lon] — so r[0]=lat, r[1]=lon
-      return { lat: r[0], lon: r[1] };
-    } catch(e) { return null; }
+      // Use proj4 string directly to bypass any bad built-in EPSG definition
+      var projStr = _knownCRS[S.epsg];
+      var wgs84 = '+proj=longlat +datum=WGS84 +no_defs';
+      var r;
+      if (projStr) {
+        r = proj4(projStr, wgs84, [easting, northing]);
+      } else {
+        r = proj4(S.epsg, 'EPSG:4326', [easting, northing]);
+      }
+      // proj4 always returns [lon, lat] when converting TO +proj=longlat
+      return { lon: r[0], lat: r[1] };
+    } catch(e) { console.error('toWgs84 error:', e); return null; }
   }
 
   // Convert BCF/IFC quaternion to Cesium heading+pitch+roll
