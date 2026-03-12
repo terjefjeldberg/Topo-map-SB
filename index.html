@@ -1,132 +1,71 @@
 <!DOCTYPE html>
-<!-- saved from url=(0062)file:///C:/Users/terje/Downloads/streambim-topo-widget_10.html -->
+<!-- saved from url=(0062)file:///C:/Users/terje/Downloads/streambim-topo-widget_11.html -->
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>StreamBIM · Topographic Map</title>
+  <title>StreamBIM · Topo Map</title>
 
-  <!-- 1. StreamBIM API loads FIRST, synchronously -->
+  <!-- ═══════════════════════════════════════════════════════════════
+       CRITICAL: StreamBIM API must be the very first script.
+       StreamBIM.connect() is called synchronously right after —
+       this ensures the Penpal handshake completes before the 5s timeout.
+  ════════════════════════════════════════════════════════════════ -->
   <script src="./index_files/streambim-widget-api.min.js.last ned"></script>
-
-  <!-- 2. StreamBIM.connect() called immediately in next script tag — beats Penpal 5s timeout -->
   <script>
-    var _pendingEvents = [];
-    var _cesiumReady = false;
+    // Global state accessible by all later code
+    window._sbState = {
+      pending: [],
+      ready: false,
+      epsg: 'EPSG:25832',
+      viewer: null,
+      marker: null,
+      lastPos: null
+    };
 
+    // Connect immediately — synchronously, before any other scripts or DOM
     window.StreamBIM.connect({
-      cameraChanged: function(camera) {
-        if (!camera || !camera.position) return;
-        if (!_cesiumReady) { _pendingEvents.push({ type: 'camera', data: camera }); return; }
-        window._handleCamera(camera);
+      cameraChanged: function(cam) {
+        if (!cam || !cam.position) return;
+        if (!window._sbState.ready) {
+          window._sbState.pending.push({ type: 'cam', d: cam });
+          return;
+        }
+        window._onCamera(cam);
       },
-      pickedObject: function(result) {
-        if (!result || !result.point) return;
-        if (!_cesiumReady) { _pendingEvents.push({ type: 'pick', data: result }); return; }
-        window._handlePick(result);
+      pickedObject: function(res) {
+        if (!res || !res.point) return;
+        if (!window._sbState.ready) {
+          window._sbState.pending.push({ type: 'pick', d: res });
+          return;
+        }
+        window._onPick(res);
       }
     })
     .then(function() {
-      var dot = document.getElementById('conn-dot');
-      var lbl = document.getElementById('conn-label');
-      if (dot) { dot.className = 'status-dot connected'; }
-      if (lbl) { lbl.textContent = 'Connected'; }
-      _log('StreamBIM connected ✓', 'success');
+      window._sbState.connected = true;
+      var el = document.getElementById('conn-status');
+      if (el) { el.textContent = '● Connected'; el.style.color = '#00ff9d'; }
     })
     .catch(function() {
-      var dot = document.getElementById('conn-dot');
-      var lbl = document.getElementById('conn-label');
-      if (dot) { dot.className = 'status-dot error'; }
-      if (lbl) { lbl.textContent = 'Not in StreamBIM'; }
-      _log('Not inside StreamBIM — use simulation mode', 'warn');
+      var el = document.getElementById('conn-status');
+      if (el) { el.textContent = '● Not in StreamBIM'; el.style.color = '#ff6b35'; }
     });
-
-    function _log(msg, type) {
-      var el = document.getElementById('log');
-      if (!el) return;
-      var ts = new Date().toTimeString().slice(0,8);
-      var d = document.createElement('div');
-      d.className = 'log-entry ' + (type || 'info');
-      d.innerHTML = '<span class="log-time">' + ts + '</span>' + msg;
-      el.appendChild(d);
-      el.scrollTop = el.scrollHeight;
-      while (el.children.length > 80) el.removeChild(el.firstChild);
-    }
-    window._log = _log;
   </script>
 
-  <!-- proj4 loaded dynamically in startWidget -->
-
-  <!-- 4. Cesium CSS only — JS loaded dynamically later so it doesn't block -->
   <link href="./index_files/widgets.css" rel="stylesheet">
 
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap');
 
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
-    :root {
-      --bg: #0a0e13;
-      --panel: #111720;
-      --panel-border: #1e2d3d;
-      --accent: #00d4ff;
-      --accent2: #00ff9d;
-      --warn: #ff6b35;
-      --text: #c8d8e8;
-      --text-dim: #5a7a94;
-      --text-bright: #eaf4ff;
-      --radius: 6px;
-    }
-
-    html, body {
+    html, body, #cesiumViewport {
       width: 100%; height: 100%;
-      background: var(--bg); color: var(--text);
-      font-family: 'Syne', sans-serif;
       overflow: hidden;
-    }
-
-    #app {
-      display: flex; flex-direction: column;
-      width: 100%; height: 100vh;
-    }
-
-    /* ── Header ── */
-    #header {
-      display: flex; align-items: center; gap: 12px;
-      padding: 10px 16px;
-      background: var(--panel);
-      border-bottom: 1px solid var(--panel-border);
-      flex-shrink: 0;
-    }
-    .logo-mark {
-      width: 26px; height: 26px;
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
-      border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 13px;
-    }
-    #header h1 { font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-bright); }
-    #status-bar { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-    .status-pill { display: flex; align-items: center; gap: 6px; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-dim); }
-    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim); transition: background 0.4s, box-shadow 0.4s; }
-    .status-dot.connected { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); animation: pulse 2s infinite; }
-    .status-dot.error { background: var(--warn); }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
-
-    /* ── Main row ── */
-    #main {
-      display: flex; flex: 1;
-      min-height: 0; /* critical — lets flex children shrink */
-      overflow: hidden;
-    }
-
-    /* ── Cesium fills all remaining space ── */
-    #cesium-container {
-      flex: 1;
-      position: relative;
-      min-width: 0; min-height: 0;
       background: #050810;
     }
 
-    /* Cesium viewer must be 100% of its container */
-    #cesiumViewport,
+    /* Cesium fills 100% */
     #cesiumViewport .cesium-viewer,
     #cesiumViewport .cesium-viewer-cesiumWidgetContainer,
     #cesiumViewport canvas {
@@ -134,280 +73,277 @@
       height: 100% !important;
     }
 
-    #cesium-loading {
-      position: absolute; inset: 0;
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 12px; color: var(--text-dim); font-family: 'DM Mono', monospace; font-size: 11px;
-      background: #050810;
+    /* ── Floating top bar ── */
+    #topbar {
+      position: fixed; top: 0; left: 0; right: 0;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 12px;
+      background: rgba(10,14,20,0.75);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      z-index: 100;
+      font-family: 'DM Mono', monospace;
     }
-    #cesium-loading.hidden { display: none; }
-    .spinner {
-      width: 28px; height: 28px;
-      border: 2px solid var(--panel-border); border-top-color: var(--accent);
-      border-radius: 50%; animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* ── Side panel ── */
-    #side-panel {
-      width: 230px; flex-shrink: 0;
-      background: var(--panel);
-      border-left: 1px solid var(--panel-border);
-      display: flex; flex-direction: column;
-      overflow: hidden;
+    #conn-status {
+      font-size: 11px;
+      color: #5a7a94;
+      letter-spacing: 0.04em;
     }
-    .panel-section { padding: 12px 14px; border-bottom: 1px solid var(--panel-border); }
-    .panel-label { font-size: 9px; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 8px; }
 
-    .coord-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 5px; }
-    .coord-key { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim); min-width: 32px; }
-    .coord-val { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--accent); text-align: right; flex: 1; }
-
-    .crs-row { display: flex; gap: 5px; align-items: center; }
-    .crs-row input {
-      flex: 1; background: rgba(255,255,255,0.04); border: 1px solid var(--panel-border);
-      border-radius: var(--radius); color: var(--text-bright); font-family: 'DM Mono', monospace;
-      font-size: 11px; padding: 5px 7px; outline: none; transition: border-color 0.2s;
+    /* CRS input row */
+    #crs-row { display: flex; align-items: center; gap: 6px; }
+    #crs-input {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 5px;
+      color: #eaf4ff;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      padding: 4px 8px;
+      width: 110px;
+      outline: none;
     }
-    .crs-row input:focus { border-color: var(--accent); }
-    .crs-row button {
-      padding: 5px 9px; border: 1px solid var(--accent); background: transparent; color: var(--accent);
-      font-family: 'Syne', sans-serif; font-size: 10px; font-weight: 700;
-      border-radius: var(--radius); cursor: pointer; transition: background 0.2s, color 0.2s; white-space: nowrap;
+    #crs-input:focus { border-color: #00d4ff; }
+    #crs-apply {
+      padding: 4px 10px;
+      background: transparent;
+      border: 1px solid #00d4ff;
+      border-radius: 5px;
+      color: #00d4ff;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
     }
-    .crs-row button:hover { background: var(--accent); color: var(--bg); }
+    #crs-apply:hover { background: #00d4ff; color: #050810; }
 
-    .crs-presets { display: flex; gap: 3px; flex-wrap: wrap; margin-top: 7px; }
-    .preset-btn {
-      padding: 3px 7px; font-size: 9px; font-family: 'DM Mono', monospace;
-      background: rgba(255,255,255,0.03); border: 1px solid var(--panel-border);
-      border-radius: 4px; color: var(--text-dim); cursor: pointer; transition: all 0.15s;
+    /* ── Floating coords bottom-left ── */
+    #coords {
+      position: fixed; bottom: 12px; left: 12px;
+      background: rgba(10,14,20,0.78);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 7px;
+      padding: 8px 12px;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      color: #5a7a94;
+      z-index: 100;
+      line-height: 1.8;
+      display: none;
     }
-    .preset-btn:hover { border-color: var(--accent); color: var(--accent); }
-
-    #log { flex: 1; overflow-y: auto; padding: 8px 12px; display: flex; flex-direction: column; gap: 2px; }
-    #log::-webkit-scrollbar { width: 3px; }
-    #log::-webkit-scrollbar-thumb { background: var(--panel-border); border-radius: 2px; }
-    .log-entry { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-dim); line-height: 1.5; padding: 2px 0; }
-    .log-entry.success { color: var(--accent2); }
-    .log-entry.warn { color: var(--warn); }
-    .log-time { margin-right: 5px; opacity: 0.45; }
+    #coords span { color: #00d4ff; margin-left: 6px; }
 
     /* ── Setup overlay ── */
     #setup-overlay {
-      position: absolute; inset: 0;
-      background: rgba(10,14,19,0.96);
+      position: fixed; inset: 0;
+      background: rgba(5,8,16,0.92);
       display: flex; align-items: center; justify-content: center;
-      z-index: 200; backdrop-filter: blur(8px);
+      z-index: 200;
+      backdrop-filter: blur(8px);
     }
     #setup-overlay.hidden { display: none; }
-    .setup-card {
-      background: var(--panel); border: 1px solid var(--panel-border);
-      border-radius: 12px; padding: 28px 32px; width: 340px; max-width: 92vw;
-    }
-    .setup-card h2 { font-size: 15px; font-weight: 700; color: var(--text-bright); margin-bottom: 6px; }
-    .setup-card p { font-size: 11px; color: var(--text-dim); line-height: 1.8; margin-bottom: 18px; }
-    .big-input {
-      width: 100%; background: rgba(255,255,255,0.05); border: 1px solid var(--panel-border);
-      border-radius: var(--radius); color: var(--text-bright); font-family: 'DM Mono', monospace;
-      font-size: 15px; padding: 10px 12px; outline: none; transition: border-color 0.2s;
-      margin-bottom: 10px; text-align: center; letter-spacing: 0.05em;
-    }
-    .big-input:focus { border-color: var(--accent); }
-    .setup-presets { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 18px; }
-    .setup-presets .preset-btn { font-size: 10px; padding: 4px 9px; }
-    .start-btn {
-      width: 100%; padding: 10px; border: 1px solid var(--accent);
-      background: transparent; color: var(--accent);
-      font-family: 'Syne', sans-serif; font-size: 11px; font-weight: 700;
-      letter-spacing: 0.1em; text-transform: uppercase;
-      border-radius: var(--radius); cursor: pointer; transition: background 0.2s, color 0.2s;
-    }
-    .start-btn:hover { background: var(--accent); color: var(--bg); }
-    .sim-btn {
-      width: 100%; padding: 7px; margin-top: 7px;
-      border: 1px solid var(--text-dim); background: transparent; color: var(--text-dim);
-      font-family: 'Syne', sans-serif; font-size: 10px; font-weight: 700;
-      letter-spacing: 0.08em; text-transform: uppercase;
-      border-radius: var(--radius); cursor: pointer; transition: background 0.2s, color 0.2s;
-    }
-    .sim-btn:hover { background: var(--text-dim); color: var(--bg); }
 
-    /* pulse marker */
-    #marker { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); pointer-events: none; opacity: 0; transition: opacity 0.3s; }
-    #marker.visible { opacity: 1; }
-    .crosshair-ring { width: 18px; height: 18px; border: 2px solid var(--accent); border-radius: 50%; box-shadow: 0 0 10px var(--accent); animation: ring-pulse 1.4s ease-out forwards; }
-    @keyframes ring-pulse { 0%{transform:scale(.5);opacity:1} 100%{transform:scale(2.5);opacity:0} }
+    .setup-card {
+      background: #111720;
+      border: 1px solid #1e2d3d;
+      border-radius: 12px;
+      padding: 28px 32px;
+      width: 320px;
+      max-width: 92vw;
+      font-family: 'DM Mono', monospace;
+    }
+    .setup-card h2 {
+      font-size: 14px; font-weight: 500;
+      color: #eaf4ff; margin-bottom: 6px;
+      letter-spacing: 0.03em;
+    }
+    .setup-card p { font-size: 11px; color: #5a7a94; line-height: 1.7; margin-bottom: 16px; }
+
+    #epsg-input {
+      width: 100%;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid #1e2d3d;
+      border-radius: 6px;
+      color: #eaf4ff;
+      font-family: 'DM Mono', monospace;
+      font-size: 16px;
+      padding: 10px 12px;
+      text-align: center;
+      outline: none;
+      margin-bottom: 10px;
+      transition: border-color 0.2s;
+    }
+    #epsg-input:focus { border-color: #00d4ff; }
+
+    .presets { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 16px; }
+    .p-btn {
+      padding: 3px 9px; font-size: 10px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid #1e2d3d;
+      border-radius: 4px; color: #5a7a94;
+      cursor: pointer; transition: all 0.12s;
+    }
+    .p-btn:hover { border-color: #00d4ff; color: #00d4ff; }
+
+    .go-btn {
+      width: 100%; padding: 10px;
+      border: 1px solid #00d4ff;
+      background: transparent; color: #00d4ff;
+      font-family: 'DM Mono', monospace;
+      font-size: 12px; letter-spacing: 0.08em;
+      border-radius: 6px; cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .go-btn:hover { background: #00d4ff; color: #050810; }
+    .sim-btn {
+      width: 100%; padding: 7px; margin-top: 6px;
+      border: 1px solid #1e2d3d;
+      background: transparent; color: #5a7a94;
+      font-family: 'DM Mono', monospace;
+      font-size: 10px; letter-spacing: 0.06em;
+      border-radius: 6px; cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .sim-btn:hover { background: #1e2d3d; color: #eaf4ff; }
+
+    /* Loading spinner */
+    #loading {
+      position: fixed; inset: 0;
+      display: none; align-items: center; justify-content: center;
+      flex-direction: column; gap: 12px;
+      background: #050810;
+      z-index: 150;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px; color: #5a7a94;
+    }
+    #loading.show { display: flex; }
+    .spin {
+      width: 26px; height: 26px;
+      border: 2px solid #1e2d3d; border-top-color: #00d4ff;
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #load-msg { color: #5a7a94; }
   </style>
 </head>
 <body>
-<div id="app">
-  <div id="header">
-    <div class="logo-mark">🗺</div>
-    <h1>StreamBIM · Topographic Map</h1>
-    <div id="status-bar">
-      <div class="status-pill">
-        <div class="status-dot" id="conn-dot"></div>
-        <span id="conn-label">Connecting…</span>
-      </div>
-    </div>
-  </div>
 
-  <div id="main">
-    <!-- Map fills all space left of panel -->
-    <div id="cesium-container">
-      <div id="cesiumViewport"></div>
-      <div id="cesium-loading"><div class="spinner"></div><span>Loading map…</span></div>
-      <div id="marker"><div class="crosshair-ring"></div></div>
-    </div>
+<!-- Fullscreen Cesium -->
+<div id="cesiumViewport"></div>
 
-    <!-- Narrow side panel -->
-    <div id="side-panel">
-      <div class="panel-section">
-        <div class="panel-label">Project CRS</div>
-        <div class="crs-row">
-          <input type="text" id="live-epsg" placeholder="EPSG:25832">
-          <button onclick="changeCRS()">Apply</button>
-        </div>
-        <div class="crs-presets">
-          <div class="preset-btn" onclick="quickCRS(&#39;EPSG:25832&#39;)">UTM 32N</div>
-          <div class="preset-btn" onclick="quickCRS(&#39;EPSG:25833&#39;)">UTM 33N</div>
-          <div class="preset-btn" onclick="quickCRS(&#39;EPSG:27700&#39;)">BNG</div>
-          <div class="preset-btn" onclick="quickCRS(&#39;EPSG:2056&#39;)">CH1903+</div>
-          <div class="preset-btn" onclick="quickCRS(&#39;EPSG:3006&#39;)">SWEREF99</div>
-        </div>
-      </div>
-
-      <div class="panel-section">
-        <div class="panel-label">Live Position</div>
-        <div class="coord-row"><span class="coord-key">LAT</span><span class="coord-val" id="val-lat">—</span></div>
-        <div class="coord-row"><span class="coord-key">LON</span><span class="coord-val" id="val-lon">—</span></div>
-        <div class="coord-row"><span class="coord-key">ALT</span><span class="coord-val" id="val-alt">—</span></div>
-      </div>
-
-      <div class="panel-label" style="padding:10px 14px 0">Event Log</div>
-      <div id="log"></div>
-    </div>
+<!-- Floating top bar -->
+<div id="topbar">
+  <span id="conn-status" style="color:#5a7a94">● Connecting…</span>
+  <div id="crs-row">
+    <input id="crs-input" type="text" placeholder="EPSG:25832">
+    <button id="crs-apply" onclick="changeCRS()">Apply</button>
   </div>
 </div>
+
+<!-- Floating coords -->
+<div id="coords">
+  LAT<span id="v-lat">—</span><br>
+  LON<span id="v-lon">—</span><br>
+  ALT<span id="v-alt">—</span>
+</div>
+
+<!-- Loading screen -->
+<div id="loading"><div class="spin"></div><div id="load-msg">Loading…</div></div>
 
 <!-- Setup overlay -->
 <div id="setup-overlay">
   <div class="setup-card">
-    <h2>Which CRS is this project?</h2>
-    <p>Enter the EPSG code from your StreamBIM project settings. Any EPSG code is supported — definitions are fetched automatically.</p>
-    <input class="big-input" type="text" id="init-epsg" value="EPSG:25832" placeholder="e.g. EPSG:5946">
-    <div class="setup-presets">
-      <div class="preset-btn" onclick="setPreset(&#39;EPSG:25832&#39;)">UTM 32N</div>
-      <div class="preset-btn" onclick="setPreset(&#39;EPSG:25833&#39;)">UTM 33N</div>
-      <div class="preset-btn" onclick="setPreset(&#39;EPSG:5946&#39;)">NTM 6</div>
-      <div class="preset-btn" onclick="setPreset(&#39;EPSG:27700&#39;)">BNG</div>
-      <div class="preset-btn" onclick="setPreset(&#39;EPSG:2056&#39;)">CH1903+</div>
-      <div class="preset-btn" onclick="setPreset(&#39;EPSG:3006&#39;)">SWEREF99</div>
+    <h2>Project CRS</h2>
+    <p>Enter the EPSG code from your StreamBIM project settings.</p>
+    <input id="epsg-input" type="text" value="EPSG:25832" placeholder="e.g. EPSG:5946">
+    <div class="presets">
+      <div class="p-btn" onclick="sp(&#39;EPSG:25832&#39;)">UTM 32N</div>
+      <div class="p-btn" onclick="sp(&#39;EPSG:25833&#39;)">UTM 33N</div>
+      <div class="p-btn" onclick="sp(&#39;EPSG:5946&#39;)">NTM 6</div>
+      <div class="p-btn" onclick="sp(&#39;EPSG:27700&#39;)">BNG</div>
+      <div class="p-btn" onclick="sp(&#39;EPSG:2056&#39;)">CH1903+</div>
+      <div class="p-btn" onclick="sp(&#39;EPSG:3006&#39;)">SWEREF99</div>
     </div>
-    <button class="start-btn" onclick="startWidget(false)">Open Map</button>
-    <button class="sim-btn" onclick="startWidget(true)">Simulation mode</button>
+    <button class="go-btn" onclick="startWidget(false)">OPEN MAP</button>
+    <button class="sim-btn" onclick="startWidget(true)">simulation mode</button>
   </div>
 </div>
 
 <script>
-  var viewer = null;
-  var markerEntity = null;
-  var currentEPSG = 'EPSG:25832';
-  var lastLonLat = null;
-
-  function setPreset(e) { document.getElementById('init-epsg').value = e; }
-  function quickCRS(e) { document.getElementById('live-epsg').value = e; changeCRS(); }
-
-  // Fetch proj4 definition from epsg.io for any unknown EPSG code
-  function ensureEPSG(epsg, callback) {
-    if (proj4.defs(epsg)) { callback(null); return; }
-    var code = epsg.replace('EPSG:','');
-    _log('Fetching definition for ' + epsg + '…');
-    fetch('https://epsg.io/' + code + '.proj4')
-      .then(function(r) { return r.text(); })
-      .then(function(def) {
-        if (!def || def.indexOf('+proj') === -1) {
-          callback('Unknown EPSG code: ' + epsg);
-          return;
-        }
-        proj4.defs(epsg, def);
-        _log('Loaded ' + epsg, 'success');
-        callback(null);
-      })
-      .catch(function(e) { callback('Could not fetch ' + epsg + ': ' + e.message); });
-  }
+  var S = window._sbState;
+  function sp(e) { document.getElementById('epsg-input').value = e; }
+  function setMsg(m) { document.getElementById('load-msg').textContent = m; }
 
   function changeCRS() {
-    var val = document.getElementById('live-epsg').value.trim();
-    if (!val) return;
-    ensureEPSG(val, function(err) {
-      if (err) { _log(err, 'warn'); return; }
-      currentEPSG = val;
-      _log('CRS: ' + currentEPSG, 'success');
+    var v = document.getElementById('crs-input').value.trim();
+    if (!v) return;
+    loadEPSG(v, function(err) {
+      if (err) { console.warn(err); return; }
+      S.epsg = v;
     });
   }
 
-  function crsToWgs84(x, y) {
+  function loadEPSG(epsg, cb) {
+    if (typeof proj4 !== 'undefined' && proj4.defs(epsg)) { cb(null); return; }
+    if (typeof proj4 === 'undefined') { cb('proj4 not loaded yet'); return; }
+    var code = epsg.replace('EPSG:','');
+    fetch('https://epsg.io/' + code + '.proj4')
+      .then(function(r){ return r.text(); })
+      .then(function(def){
+        if (!def || def.indexOf('+proj') === -1) { cb('Unknown EPSG: ' + epsg); return; }
+        proj4.defs(epsg, def);
+        cb(null);
+      })
+      .catch(function(e){ cb(e.message); });
+  }
+
+  function toWgs84(x, y) {
     try {
-      var r = proj4(currentEPSG, 'EPSG:4326', [x, y]);
+      var r = proj4(S.epsg, 'EPSG:4326', [x, y]);
       return { lon: r[0], lat: r[1] };
-    } catch(e) {
-      _log('Conversion error: ' + e.message, 'warn');
-      return null;
-    }
+    } catch(e) { return null; }
   }
 
   function flyTo(lon, lat, alt) {
-    if (!viewer) return;
-    markerEntity.position = Cesium.Cartesian3.fromDegrees(lon, lat);
-    markerEntity.show = true;
-    viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(lon, lat, Math.max((alt||0) + 300, 400)),
+    if (!S.viewer) return;
+    S.marker.position = Cesium.Cartesian3.fromDegrees(lon, lat);
+    S.marker.show = true;
+    S.viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(lon, lat, Math.max((alt||0)+300, 400)),
       orientation: { heading: 0, pitch: Cesium.Math.toRadians(-55), roll: 0 },
-      duration: lastLonLat ? 0.7 : 2.0,
+      duration: S.lastPos ? 0.7 : 2.0,
       easingFunction: Cesium.EasingFunction.QUADRATIC_OUT
     });
-    lastLonLat = { lon: lon, lat: lat };
-    var m = document.getElementById('marker');
-    m.innerHTML = '<div class="crosshair-ring"></div>';
-    m.classList.add('visible');
-    setTimeout(function(){ m.classList.remove('visible'); }, 1500);
-    document.getElementById('val-lat').textContent = lat.toFixed(6) + '°';
-    document.getElementById('val-lon').textContent = lon.toFixed(6) + '°';
-    document.getElementById('val-alt').textContent = (alt||0).toFixed(1) + ' m';
+    S.lastPos = [lon, lat];
+    document.getElementById('coords').style.display = 'block';
+    document.getElementById('v-lat').textContent = lat.toFixed(6) + '°';
+    document.getElementById('v-lon').textContent = lon.toFixed(6) + '°';
+    document.getElementById('v-alt').textContent = (alt||0).toFixed(1) + ' m';
   }
 
-  // Exposed globally so the early StreamBIM.connect() callbacks can reach them
-  window._handleCamera = function(camera) {
-    var wgs = crsToWgs84(camera.position.x, camera.position.y);
-    if (!wgs) return;
-    _log('→ (' + wgs.lat.toFixed(5) + '°, ' + wgs.lon.toFixed(5) + '°)');
-    flyTo(wgs.lon, wgs.lat, camera.position.z);
+  window._onCamera = function(cam) {
+    var w = toWgs84(cam.position.x, cam.position.y);
+    if (w) flyTo(w.lon, w.lat, cam.position.z);
+  };
+  window._onPick = function(res) {
+    var w = toWgs84(res.point.x, res.point.y);
+    if (w) flyTo(w.lon, w.lat, res.point.z);
   };
 
-  window._handlePick = function(result) {
-    var wgs = crsToWgs84(result.point.x, result.point.y);
-    if (!wgs) return;
-    _log('Picked → (' + wgs.lat.toFixed(5) + '°, ' + wgs.lon.toFixed(5) + '°)', 'success');
-    flyTo(wgs.lon, wgs.lat, result.point.z);
-  };
-
-  function initCesium(callback) {
+  function initCesium(cb) {
     Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlOGNmZDViOS0wZWYwLTQ1ZjktODkwZS0wNGJiODM4YTdjM2EiLCJpZCI6NDAyNDEwLCJpYXQiOjE3NzMzMDk4OTd9.yqBK0ZLNU-S9J2K-0xxMWc34Kzdlb0oCxgNOY4ADGDs';
-
-    viewer = new Cesium.Viewer('cesiumViewport', {
+    S.viewer = new Cesium.Viewer('cesiumViewport', {
       terrain: Cesium.Terrain.fromWorldTerrain({ requestVertexNormals: true }),
       baseLayerPicker: false, geocoder: false, homeButton: false,
       sceneModePicker: false, navigationHelpButton: false,
       animation: false, timeline: false, fullscreenButton: false,
       infoBox: false, selectionIndicator: false
     });
-
-    viewer.scene.globe.enableLighting = true;
-
-    markerEntity = viewer.entities.add({
-      position: Cesium.Cartesian3.fromDegrees(0, 0),
+    S.viewer.scene.globe.enableLighting = true;
+    S.marker = S.viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(0,0),
       ellipse: {
         semiMinorAxis: 8, semiMajorAxis: 8,
         material: new Cesium.ColorMaterialProperty(Cesium.Color.fromCssColorString('#00d4ff').withAlpha(0.9)),
@@ -415,83 +351,69 @@
         heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
       },
       label: {
-        text: '▲ Camera', font: '600 11px Syne',
+        text: '▲ You', font: '500 11px DM Mono',
         fillColor: Cesium.Color.fromCssColorString('#eaf4ff'),
         outlineColor: Cesium.Color.BLACK, outlineWidth: 2,
         style: Cesium.LabelStyle.FILL_AND_OUTLINE,
         verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-        pixelOffset: new Cesium.Cartesian2(0, -16),
+        pixelOffset: new Cesium.Cartesian2(0, -14),
         heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
       },
       show: false
     });
+    document.getElementById('loading').classList.remove('show');
+    if (cb) cb();
+  }
 
-    document.getElementById('cesium-loading').classList.add('hidden');
-    _log('Map ready', 'success');
-    if (callback) callback();
+  function loadScript(src, cb) {
+    var s = document.createElement('script');
+    s.src = src;
+    s.onload = cb;
+    s.onerror = function() { console.error('Failed: ' + src); cb(); };
+    document.head.appendChild(s);
   }
 
   function startWidget(simMode) {
-    var epsg = document.getElementById('init-epsg').value.trim() || 'EPSG:25832';
+    var epsg = document.getElementById('epsg-input').value.trim() || 'EPSG:25832';
+    S.epsg = epsg;
+    document.getElementById('crs-input').value = epsg;
     document.getElementById('setup-overlay').classList.add('hidden');
-    document.getElementById('live-epsg').value = epsg;
-    _log('Loading libraries…');
+    document.getElementById('loading').classList.add('show');
 
-    // Step 3: init Cesium
-    function loadCesium() {
-      var s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/cesium@1.136.0/Build/Cesium/Cesium.js';
-      s.onload = function() {
-        initCesium(function() {
-          _cesiumReady = true;
-          _pendingEvents.forEach(function(e) {
-            if (e.type === 'camera') window._handleCamera(e.data);
-            else if (e.type === 'pick') window._handlePick(e.data);
+    // Chain: proj4 → EPSG def → Cesium → init
+    setMsg('Loading coordinate engine…');
+    loadScript('https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js', function() {
+      setMsg('Fetching CRS definition…');
+      loadEPSG(epsg, function(err) {
+        if (err) console.warn(err);
+        setMsg('Loading terrain map…');
+        loadScript('https://cdn.jsdelivr.net/npm/cesium@1.136.0/Build/Cesium/Cesium.js', function() {
+          initCesium(function() {
+            S.ready = true;
+            // Flush queued events
+            S.pending.forEach(function(e) {
+              if (e.type === 'cam') window._onCamera(e.d);
+              else if (e.type === 'pick') window._onPick(e.d);
+            });
+            S.pending = [];
+            if (simMode) runSim();
           });
-          _pendingEvents = [];
-          if (simMode) { runSimulation(); }
         });
-      };
-      s.onerror = function() { _log('Failed to load Cesium', 'warn'); };
-      document.head.appendChild(s);
-    }
-
-    // Step 2: fetch EPSG definition, then load Cesium
-    function loadEPSG() {
-      currentEPSG = epsg;
-      ensureEPSG(epsg, function(err) {
-        if (err) _log(err, 'warn');
-        loadCesium();
       });
-    }
-
-    // Step 1: load proj4, then continue
-    var p = document.createElement('script');
-    p.src = 'https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js';
-    p.onload = function() { _log('CRS engine ready', 'success'); loadEPSG(); };
-    p.onerror = function() { _log('Failed to load proj4', 'warn'); };
-    document.head.appendChild(p);
+    });
   }
 
-  function runSimulation() {
-    document.getElementById('conn-dot').className = 'status-dot error';
-    document.getElementById('conn-label').textContent = 'Simulation';
-    // UTM 32N sample coords near Oslo — swap for your project area
+  function runSim() {
+    // UTM 32N sample near Oslo
     var pts = [
-      [598430,6642760,14],[598460,6642762,14],
-      [598480,6642780,12],[598475,6642810,10],
-      [598450,6642820,10],[598420,6642800,12],
-      [598415,6642775,14],[598430,6642760,14]
+      [598430,6642760,14],[598460,6642762,14],[598480,6642780,12],
+      [598475,6642810,10],[598450,6642820,10],[598430,6642760,14]
     ];
     var i = 0;
-    _log('Simulation running…', 'warn');
     var iv = setInterval(function() {
-      if (i >= pts.length) { clearInterval(iv); _log('Done', 'success'); return; }
-      var p = pts[i++];
-      var wgs = crsToWgs84(p[0], p[1]);
-      if (!wgs) return;
-      flyTo(wgs.lon, wgs.lat, p[2]);
-      _log('Sim → (' + wgs.lat.toFixed(5) + '°, ' + wgs.lon.toFixed(5) + '°)');
+      if (i >= pts.length) { clearInterval(iv); return; }
+      var p = pts[i++], w = toWgs84(p[0],p[1]);
+      if (w) flyTo(w.lon, w.lat, p[2]);
     }, 1400);
   }
 </script>
