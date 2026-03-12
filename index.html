@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<!-- saved from url=(0062)file:///C:/Users/terje/Downloads/streambim-topo-widget_14.html -->
-<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-  
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>StreamBIM · Topo Map</title>
 
   <!-- ═══════════════════════════════════════════════════════════════
@@ -10,7 +10,7 @@
        StreamBIM.connect() is called synchronously right after —
        this ensures the Penpal handshake completes before the 5s timeout.
   ════════════════════════════════════════════════════════════════ -->
-  <script src="./index_files/streambim-widget-api.min.js"></script>
+  <script src="./streambim-widget-api.min.js"></script>
   <script>
     // Global state accessible by all later code
     window._sbState = {
@@ -64,7 +64,7 @@
     });
   </script>
 
-  <link href="./index_files/widgets.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/cesium@1.136.0/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
 
   <style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap');
@@ -258,7 +258,7 @@
 <div id="topbar">
   <span id="conn-status" style="color:#5a7a94">● Connecting…</span>
   <div id="crs-row">
-    <input id="crs-input" type="text" placeholder="EPSG:25832">
+    <input id="crs-input" type="text" placeholder="EPSG:25832" />
     <button id="crs-apply" onclick="changeCRS()">Apply</button>
   </div>
 </div>
@@ -278,14 +278,14 @@
   <div class="setup-card">
     <h2>Project CRS</h2>
     <p>Enter the EPSG code from your StreamBIM project settings.</p>
-    <input id="epsg-input" type="text" value="EPSG:25832" placeholder="e.g. EPSG:5946">
+    <input id="epsg-input" type="text" value="EPSG:25832" placeholder="e.g. EPSG:5946" />
     <div class="presets">
-      <div class="p-btn" onclick="sp(&#39;EPSG:25832&#39;)">UTM 32N</div>
-      <div class="p-btn" onclick="sp(&#39;EPSG:25833&#39;)">UTM 33N</div>
-      <div class="p-btn" onclick="sp(&#39;EPSG:5946&#39;)">NTM 6</div>
-      <div class="p-btn" onclick="sp(&#39;EPSG:27700&#39;)">BNG</div>
-      <div class="p-btn" onclick="sp(&#39;EPSG:2056&#39;)">CH1903+</div>
-      <div class="p-btn" onclick="sp(&#39;EPSG:3006&#39;)">SWEREF99</div>
+      <div class="p-btn" onclick="sp('EPSG:25832')">UTM 32N</div>
+      <div class="p-btn" onclick="sp('EPSG:25833')">UTM 33N</div>
+      <div class="p-btn" onclick="sp('EPSG:5946')">NTM 6</div>
+      <div class="p-btn" onclick="sp('EPSG:27700')">BNG</div>
+      <div class="p-btn" onclick="sp('EPSG:2056')">CH1903+</div>
+      <div class="p-btn" onclick="sp('EPSG:3006')">SWEREF99</div>
     </div>
     <button class="go-btn" onclick="startWidget(false)">OPEN MAP</button>
     <button class="sim-btn" onclick="startWidget(true)">simulation mode</button>
@@ -475,6 +475,5 @@
     }, 1400);
   }
 </script>
-
-
-</body></html>
+</body>
+</html>
