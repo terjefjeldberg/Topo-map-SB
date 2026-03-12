@@ -351,10 +351,10 @@
   }
 
   function loadEPSG(epsg, cb) {
-    if (typeof proj4 !== 'undefined' && proj4.defs(epsg)) { cb(null); return; }
     if (typeof proj4 === 'undefined') { cb('proj4 not loaded yet'); return; }
-    // Try hardcoded known-good definition first
-    if (registerKnownCRS(epsg)) { cb(null); return; }
+    // Always register our known-good definitions first (overrides proj4 builtins)
+    registerKnownCRS(epsg);
+    if (proj4.defs(epsg)) { cb(null); return; }
     // Fall back to epsg.io fetch
     var code = epsg.replace('EPSG:','');
     fetch('https://epsg.io/' + code + '.proj4')
@@ -370,8 +370,8 @@
   function toWgs84(easting, northing) {
     try {
       var r = proj4(S.epsg, 'EPSG:4326', [easting, northing]);
-      // proj4 with NTM/Norwegian CRS returns [lat, lon] not [lon, lat] — swap
-      return { lon: r[1], lat: r[0] };
+      // For NTM CRS proj4 returns [lat, lon] — so r[0]=lat, r[1]=lon
+      return { lat: r[0], lon: r[1] };
     } catch(e) { return null; }
   }
 
@@ -411,9 +411,9 @@
       roll: 0
     };
 
-    // alt is camera height in metres — if negative or tiny, use a minimum viewing height
-    var camHeight = (alt && Math.abs(alt) < 50000) ? alt : 0;
-    var viewHeight = Math.max(camHeight + 50, 100);
+    // alt = Z from StreamBIM (metres above project datum)
+    // Use a sensible minimum height above terrain for visibility
+    var viewHeight = (typeof alt === 'number') ? Math.max(alt + 50, 100) : 500;
     S.viewer.camera.flyTo({
       destination: Cesium.Cartesian3.fromDegrees(lon, lat, viewHeight),
       orientation: orientation,
