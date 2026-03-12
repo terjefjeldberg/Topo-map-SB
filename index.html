@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- saved from url=(0061)file:///C:/Users/terje/Downloads/streambim-topo-widget_6.html -->
+<!-- saved from url=(0061)file:///C:/Users/terje/Downloads/streambim-topo-widget_7.html -->
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -302,12 +302,11 @@
     Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlOGNmZDViOS0wZWYwLTQ1ZjktODkwZS0wNGJiODM4YTdjM2EiLCJpZCI6NDAyNDEwLCJpYXQiOjE3NzMzMDk4OTd9.yqBK0ZLNU-S9J2K-0xxMWc34Kzdlb0oCxgNOY4ADGDs';
 
     viewer = new Cesium.Viewer('cesiumViewport', {
-      terrainProvider: Cesium.createWorldTerrain({ requestVertexNormals: true }),
+      terrain: Cesium.Terrain.fromWorldTerrain({ requestVertexNormals: true }),
       baseLayerPicker: false, geocoder: false, homeButton: false,
       sceneModePicker: false, navigationHelpButton: false,
       animation: false, timeline: false, fullscreenButton: false,
-      infoBox: false, selectionIndicator: false,
-      imageryProvider: new Cesium.IonImageryProvider({ assetId: 2 })
+      infoBox: false, selectionIndicator: false
     });
 
     viewer.scene.globe.enableLighting = true;
