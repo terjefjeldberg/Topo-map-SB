@@ -274,7 +274,17 @@
 <div id="topbar">
   <span id="conn-status" style="color:#5a7a94">● Connecting…</span>
   <div id="crs-row">
-    <input id="crs-input" type="text" placeholder="EPSG:25832" />
+    <span style="color:#7a9ab5;font-size:11px;font-family:'DM Mono',monospace">EPSG:</span>
+    <input id="crs-input" type="number" placeholder="5946" style="width:64px" />
+    <select id="crs-select" onchange="if(this.value){document.getElementById('crs-input').value=this.value;this.value=''}">
+      <option value="">presets…</option>
+      <option value="5946">5946 – NTM 6</option>
+      <option value="5945">5945 – NTM 5</option>
+      <option value="5947">5947 – NTM 7</option>
+      <option value="5545">5545 – UTM zone 45N</option>
+      <option value="25832">25832 – UTM 32N</option>
+      <option value="25833">25833 – UTM 33N</option>
+    </select>
     <button id="crs-apply" onclick="changeCRS()">Apply</button>
   </div>
 </div>
@@ -294,14 +304,17 @@
   <div class="setup-card">
     <h2>Project CRS</h2>
     <p>Enter the EPSG code from your StreamBIM project settings.</p>
-    <input id="epsg-input" type="text" value="EPSG:25832" placeholder="e.g. EPSG:5946" />
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px">
+      <span style="color:#7a9ab5;font-family:'DM Mono',monospace;font-size:13px">EPSG:</span>
+      <input id="epsg-input" type="number" value="5946" placeholder="e.g. 5946" style="flex:1" />
+    </div>
     <div class="presets">
-      <div class="p-btn" onclick="sp('EPSG:25832')">UTM 32N</div>
-      <div class="p-btn" onclick="sp('EPSG:25833')">UTM 33N</div>
-      <div class="p-btn" onclick="sp('EPSG:5946')">NTM 6</div>
-      <div class="p-btn" onclick="sp('EPSG:27700')">BNG</div>
-      <div class="p-btn" onclick="sp('EPSG:2056')">CH1903+</div>
-      <div class="p-btn" onclick="sp('EPSG:3006')">SWEREF99</div>
+      <div class="p-btn" onclick="sp('5946')">NTM 6 (5946)</div>
+      <div class="p-btn" onclick="sp('5545')">5545</div>
+      <div class="p-btn" onclick="sp('25832')">UTM 32N</div>
+      <div class="p-btn" onclick="sp('25833')">UTM 33N</div>
+      <div class="p-btn" onclick="sp('5945')">NTM 5</div>
+      <div class="p-btn" onclick="sp('5947')">NTM 7</div>
     </div>
     <button class="go-btn" onclick="startWidget(false)">OPEN MAP</button>
     <button class="sim-btn" onclick="startWidget(true)">simulation mode</button>
@@ -384,8 +397,13 @@
   };
 
   function toWgs84(easting, northing) {
-    var p = _tmParams[S.epsg];
-    if (!p) { console.warn('No TM params for', S.epsg); return null; }
+    var epsgKey = S.epsg ? S.epsg.toString().trim().toUpperCase() : '';
+    if (epsgKey.indexOf('EPSG:') === -1) epsgKey = 'EPSG:' + epsgKey.replace('EPSG','').trim();
+    var p = _tmParams[epsgKey];
+    if (!p) {
+      console.warn('No TM params for', epsgKey, '- defaulting to EPSG:5946');
+      p = _tmParams['EPSG:5946'];
+    }
     var a = 6378137.0, f = 1/298.257222101;
     var b = a*(1-f), e2 = 1-(b/a)*(b/a), k0 = 1.0;
     var lon0 = p.lon0 * Math.PI/180;
@@ -437,6 +455,7 @@
 
   function flyTo(lon, lat, alt, hpr) {
     if (!S.viewer) return;
+    if (isNaN(lon) || isNaN(lat) || isNaN(alt)) { console.warn('flyTo got NaN', lon, lat, alt); return; }
     S.marker.position = Cesium.Cartesian3.fromDegrees(lon, lat, alt||0);
     S.marker.show = true;
 
