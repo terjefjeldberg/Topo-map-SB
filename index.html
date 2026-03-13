@@ -367,14 +367,51 @@
       .catch(function(e){ cb(e.message); });
   }
 
+  // NTM/UTM inverse Transverse Mercator — pure JS, no proj4 needed
+  var _tmParams = {
+    'EPSG:5941': { lon0: 5.5,  lat0: 58, x0: 100000, y0: 1000000 },
+    'EPSG:5942': { lon0: 6.5,  lat0: 58, x0: 100000, y0: 1000000 },
+    'EPSG:5943': { lon0: 7.5,  lat0: 58, x0: 100000, y0: 1000000 },
+    'EPSG:5944': { lon0: 8.5,  lat0: 58, x0: 100000, y0: 1000000 },
+    'EPSG:5945': { lon0: 9.5,  lat0: 58, x0: 100000, y0: 1000000 },
+    'EPSG:5946': { lon0: 10.5, lat0: 58, x0: 100000, y0: 1000000 },
+    'EPSG:5947': { lon0: 11.5, lat0: 58, x0: 100000, y0: 1000000 },
+    'EPSG:5948': { lon0: 12.5, lat0: 58, x0: 100000, y0: 1000000 },
+    'EPSG:25832': { lon0: 9.0,  lat0: 0,  x0: 500000, y0: 0 },
+    'EPSG:25833': { lon0: 15.0, lat0: 0,  x0: 500000, y0: 0 },
+    'EPSG:32632': { lon0: 9.0,  lat0: 0,  x0: 500000, y0: 0 },
+    'EPSG:32633': { lon0: 15.0, lat0: 0,  x0: 500000, y0: 0 }
+  };
+
   function toWgs84(easting, northing) {
-    try {
-      var projStr = _knownCRS[S.epsg] || proj4.defs(S.epsg);
-      var wgs84 = '+proj=longlat +datum=WGS84 +no_defs';
-      // proj4 TM: input is [easting, northing], output is [lon, lat]
-      var r = proj4(projStr, wgs84, [easting, northing]);
-      return { lon: r[0], lat: r[1] };
-    } catch(e) { console.error('toWgs84 error:', e); return null; }
+    var p = _tmParams[S.epsg];
+    if (!p) { console.warn('No TM params for', S.epsg); return null; }
+    var a = 6378137.0, f = 1/298.257222101;
+    var b = a*(1-f), e2 = 1-(b/a)*(b/a), k0 = 1.0;
+    var lon0 = p.lon0 * Math.PI/180;
+    var lat0 = p.lat0 * Math.PI/180;
+    var x = easting - p.x0, y = northing - p.y0;
+    var A0 = 1-e2/4-3*e2*e2/64-5*e2*e2*e2/256;
+    var A2 = 3/8*(e2+e2*e2/4+15*e2*e2*e2/128);
+    var A4 = 15/256*(e2*e2+3*e2*e2*e2/4);
+    var A6 = 35*e2*e2*e2/3072;
+    var M0 = a*(A0*lat0 - A2*Math.sin(2*lat0) + A4*Math.sin(4*lat0) - A6*Math.sin(6*lat0));
+    var M = M0 + y/k0;
+    var mu = M/(a*A0);
+    var e1 = (1-Math.sqrt(1-e2))/(1+Math.sqrt(1-e2));
+    var lat_fp = mu + (3*e1/2-27*e1*e1*e1/32)*Math.sin(2*mu)
+               + (21*e1*e1/16-55*e1*e1*e1*e1/32)*Math.sin(4*mu)
+               + (151*e1*e1*e1/96)*Math.sin(6*mu)
+               + (1097*e1*e1*e1*e1/512)*Math.sin(8*mu);
+    var sinFP = Math.sin(lat_fp), cosFP = Math.cos(lat_fp), tanFP = Math.tan(lat_fp);
+    var N1 = a/Math.sqrt(1-e2*sinFP*sinFP);
+    var T1 = tanFP*tanFP;
+    var C1 = e2/(1-e2)*cosFP*cosFP;
+    var R1 = a*(1-e2)/Math.pow(1-e2*sinFP*sinFP, 1.5);
+    var D = x/(N1*k0);
+    var lat = lat_fp - (N1*tanFP/R1)*(D*D/2-(5+3*T1+10*C1-4*C1*C1-9*e2/(1-e2))*D*D*D*D/24);
+    var lon = lon0 + (D-(1+2*T1+C1)*D*D*D/6)/cosFP;
+    return { lat: lat*180/Math.PI, lon: lon*180/Math.PI };
   }
 
   // Convert BCF/IFC quaternion to Cesium heading+pitch+roll
