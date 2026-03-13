@@ -431,16 +431,20 @@ function flyTo(lon, lat, alt, quat) {
   S.marker.show = true;
 
   // Convert BCF quaternion to Cesium HPR
+  // BCF: X=East, Y=North, Z=Up (right-handed)
+  // Symptoms: CCW rotation -> globe tilts down = heading and pitch are swapped
+  //           camera tilt up -> globe rotates CCW = pitch and heading swapped
+  // Fix: swap heading/pitch axes
   var heading = 0, pitch = Cesium.Math.toRadians(-45), roll = 0;
   if (quat) {
     var qx=quat.x, qy=quat.y, qz=quat.z, qw=quat.w;
-    // BCF: X=East, Y=North, Z=Up — extract yaw (heading around Z)
-    heading = Math.atan2(2*(qw*qz + qx*qy), 1 - 2*(qy*qy + qz*qz));
-    // Extract pitch (tilt around X), offset by -90deg for Cesium convention
+    // Pitch (tilt up/down) — was being read as heading
     var sinP = 2*(qw*qy - qz*qx);
     sinP = Math.max(-1, Math.min(1, sinP));
-    pitch = Math.asin(sinP) - Math.PI/2;
-    // Clamp pitch to avoid flipping
+    heading = Math.asin(sinP);
+    // Heading (rotate left/right) — was being read as pitch
+    pitch = Math.atan2(2*(qw*qz + qx*qy), 1 - 2*(qy*qy + qz*qz)) - Math.PI/2;
+    // Clamp pitch
     pitch = Math.max(Cesium.Math.toRadians(-90), Math.min(Cesium.Math.toRadians(0), pitch));
     // Roll
     roll = Math.atan2(2*(qw*qx + qy*qz), 1 - 2*(qx*qx + qy*qy));
