@@ -449,16 +449,22 @@ function flyTo(lon, lat, alt, quat) {
       var el = document.getElementById('v-alt');
       if (el) el.textContent = 'Q: ' + qx.toFixed(3)+','+qy.toFixed(3)+','+qz.toFixed(3)+','+qw.toFixed(3);
     }
-    // Heading: rotation around Z (up) axis
-    heading = Math.atan2(2*(qw*qz + qx*qy), 1 - 2*(qy*qy + qz*qz));
-    // Pitch: BCF default look direction is along +Y (north/forward)
-    // When quat is identity (0,0,0,1), camera looks along +Y = horizontal
-    // Cesium pitch=0 is horizontal, pitch=-PI/2 is straight down
-    // Extract forward vector Y component to get pitch
-    var fwdZ = 2*(qy*qz - qw*qx); // Z component of rotated +Y vector
+    // Normalise quaternion to avoid gimbal lock / 180 flip
+    var len = Math.sqrt(qx*qx + qy*qy + qz*qz + qw*qw);
+    qx/=len; qy/=len; qz/=len; qw/=len;
+
+    // BCF forward vector is +Y. Rotate +Y by quaternion to get look direction.
+    // Rotated +Y: 
+    var fwdX = 2*(qx*qy + qw*qz);
+    var fwdY = 1 - 2*(qx*qx + qz*qz);
+    var fwdZ = 2*(qy*qz - qw*qx);
+
+    // Heading: angle of forward vector in XY plane, +90° to correct BCF->Cesium offset
+    heading = Math.atan2(fwdX, fwdY) + Math.PI/2;
+
+    // Pitch: elevation angle of forward vector
     pitch = Math.asin(Math.max(-1, Math.min(1, fwdZ)));
-    // Negate: BCF +Z=up but Cesium pitch increases upward
-    pitch = -pitch;
+
     roll = 0;
   }
 
