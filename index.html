@@ -424,12 +424,10 @@ function flyTo(lon, lat, alt, quat) {
   if (now - _lastUpdate < 16) return;
   _lastUpdate = now;
 
-  // Place Cesium camera at same height as StreamBIM camera
-  // alt from StreamBIM: negative = above ground, positive = below
-  // Norwegian terrain ~50m above sea level, so add offset
-  var terrainOffset = 50;
-  var viewAlt = -alt + terrainOffset + 200;
-  var dest = Cesium.Cartesian3.fromDegrees(lon, lat, Math.max(viewAlt, 50));
+  // alt from StreamBIM: negative = above ground, positive = below ground
+  // Norwegian terrain here ~50m ASL. Camera height above sea level = 50 - alt
+  var viewAlt = Math.max(50 - alt, 5);
+  var dest = Cesium.Cartesian3.fromDegrees(lon, lat, viewAlt);
 
 
 
@@ -459,8 +457,10 @@ function flyTo(lon, lat, alt, quat) {
     var fwdY = 1 - 2*(qx*qx + qz*qz);
     var fwdZ = 2*(qy*qz - qw*qx);
 
-    // Heading: angle of forward vector in XY plane, +90° to correct BCF->Cesium offset
-    heading = Math.atan2(fwdX, fwdY) + Math.PI/2;
+    // Heading: angle of forward vector in XY plane
+    // +90° corrects BCF Y-forward to Cesium North-up convention
+    // Negate because BCF and Cesium have opposite rotation directions
+    heading = -(Math.atan2(fwdX, fwdY)) + Math.PI/2;
 
     // Pitch: elevation angle of forward vector
     pitch = Math.asin(Math.max(-1, Math.min(1, fwdZ)));
