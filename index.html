@@ -397,7 +397,7 @@ async function initCesium() {
       var dE = cam.position.easting - S.lastPos[2];
       var dN = cam.position.northing - S.lastPos[3];
       var dist = Math.sqrt(dE*dE + dN*dN);
-      if (dist < 2) posChanged = false;
+      if (dist < 10) posChanged = false;
     }
 
     flyTo(w.lon, w.lat, alt, quat, posChanged);
