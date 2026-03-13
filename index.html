@@ -213,7 +213,16 @@ window.StreamBIM.connect({
   cameraChanged: function(cam) {
     var el = document.getElementById('conn-status');
     if (el) { el.textContent = '● Connected'; el.className = 'connected'; }
+    window._startPolling();
     if (!cam) return;
+    // Log full raw cam object including any _camera property
+    if (!window._rawLogged) {
+      window._rawLogged = true;
+      var keys = Object.keys(cam);
+      console.log('CAM KEYS:', keys);
+      console.log('CAM RAW:', JSON.stringify(cam));
+      if (cam._camera) console.log('_CAMERA:', JSON.stringify(cam._camera));
+    }
     var pos = Array.isArray(cam.position)
       ? cam.position
       : [cam.position.x, cam.position.y, cam.position.z];
