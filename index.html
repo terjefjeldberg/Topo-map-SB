@@ -208,6 +208,28 @@ function toWgs84(easting, northing) {
   return { lat: lat*180/Math.PI, lon: lon*180/Math.PI };
 }
 
+// Polling must be defined before StreamBIM.connect fires
+window._startPolling = function() {
+  if (window._pollInterval) return;
+  window._pollInterval = setInterval(function() {
+    if (!S || !S.api) return;
+    S.api.getCameraState().then(function(cam) {
+      if (!cam) return;
+      if (!window._pollLogged) {
+        window._pollLogged = true;
+        console.log('POLL CAM:', JSON.stringify(cam));
+      }
+      if (Array.isArray(cam.position)) {
+        cam.position = { easting: cam.position[0], alt: cam.position[1], northing: cam.position[2] };
+      }
+      if (cam.quaternion && Array.isArray(cam.quaternion)) {
+        cam.orientation = { x: cam.quaternion[0], y: cam.quaternion[1], z: cam.quaternion[2], w: cam.quaternion[3] };
+      }
+      window._onCamera(cam);
+    }).catch(function(){});
+  }, 100);
+};
+
 // ── StreamBIM connect — must happen synchronously on page load ──
 window.StreamBIM.connect({
   cameraChanged: function(cam) {
@@ -215,14 +237,6 @@ window.StreamBIM.connect({
     if (el) { el.textContent = '● Connected'; el.className = 'connected'; }
     window._startPolling();
     if (!cam) return;
-    // Log full raw cam object including any _camera property
-    if (!window._rawLogged) {
-      window._rawLogged = true;
-      var keys = Object.keys(cam);
-      console.log('CAM KEYS:', keys);
-      console.log('CAM RAW:', JSON.stringify(cam));
-      if (cam._camera) console.log('_CAMERA:', JSON.stringify(cam._camera));
-    }
     var pos = Array.isArray(cam.position)
       ? cam.position
       : [cam.position.x, cam.position.y, cam.position.z];
@@ -393,30 +407,7 @@ async function initCesium() {
   document.getElementById('loading-screen').style.display = 'none';
 
   // Define camera handlers
-  // Poll camera state to catch heading changes not sent via cameraChanged
-  window._startPolling = function() {
-    if (window._pollInterval) return;
-    window._pollInterval = setInterval(function() {
-      if (!S.api) return;
-      S.api.getCameraState().then(function(cam) {
-        if (!cam) return;
-        // Log first result to see structure
-        if (!window._pollLogged) {
-          window._pollLogged = true;
-          console.log('POLL CAM:', JSON.stringify(cam));
-        }
-        // Normalize position
-        if (Array.isArray(cam.position)) {
-          cam.position = { easting: cam.position[0], alt: cam.position[1], northing: cam.position[2] };
-        }
-        // Normalize quaternion
-        if (cam.quaternion && Array.isArray(cam.quaternion)) {
-          cam.orientation = { x: cam.quaternion[0], y: cam.quaternion[1], z: cam.quaternion[2], w: cam.quaternion[3] };
-        }
-        window._onCamera(cam);
-      }).catch(function(e){ console.log('POLL ERR:', e); });
-    }, 100);
-  };
+  // _startPolling defined globally above
 
   window.setNavMode = function(mode) {
     if (!S.api) return;
