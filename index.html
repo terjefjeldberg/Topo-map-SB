@@ -390,9 +390,19 @@ async function initCesium() {
     var alt = cam.position.alt;
     var quat = cam.orientation || cam.quaternion;
     if (Array.isArray(quat)) quat = { x: quat[0], y: quat[1], z: quat[2], w: quat[3] };
-    flyTo(w.lon, w.lat, alt, quat);
 
-    // Update coords display with converted WGS84
+    // Only update position if moved more than 2 metres — ignore orbit drift
+    var posChanged = true;
+    if (S.lastPos) {
+      var dE = cam.position.easting - S.lastPos[2];
+      var dN = cam.position.northing - S.lastPos[3];
+      var dist = Math.sqrt(dE*dE + dN*dN);
+      if (dist < 2) posChanged = false;
+    }
+
+    flyTo(w.lon, w.lat, alt, quat, posChanged);
+    if (posChanged) S.lastPos = [w.lon, w.lat, cam.position.easting, cam.position.northing];
+
     document.getElementById('v-lat').textContent = 'LAT  ' + w.lat.toFixed(6) + '°';
     document.getElementById('v-lon').textContent = 'LON  ' + w.lon.toFixed(6) + '°';
     document.getElementById('v-alt').textContent = 'ALT  ' + alt.toFixed(1) + ' m';
@@ -415,7 +425,7 @@ async function initCesium() {
 // Throttle: max 60fps
 var _lastUpdate = 0;
 
-function flyTo(lon, lat, alt, quat) {
+function flyTo(lon, lat, alt, quat, posChanged) {
   if (!S.viewer) return;
   if (isNaN(lon) || isNaN(lat)) return;
 
@@ -424,10 +434,11 @@ function flyTo(lon, lat, alt, quat) {
   if (now - _lastUpdate < 16) return;
   _lastUpdate = now;
 
-  // alt from StreamBIM: negative = above ground, positive = below ground
-  // Norwegian terrain here ~50m ASL. Camera height above sea level = 50 - alt
   var viewAlt = Math.max(50 - alt, 5);
-  var dest = Cesium.Cartesian3.fromDegrees(lon, lat, viewAlt);
+  // If only rotating (no position change), keep current destination
+  var dest = (posChanged === false && S.lastPos)
+    ? Cesium.Cartesian3.fromDegrees(S.lastPos[0], S.lastPos[1], viewAlt)
+    : Cesium.Cartesian3.fromDegrees(lon, lat, viewAlt);
 
 
 
@@ -447,22 +458,23 @@ function flyTo(lon, lat, alt, quat) {
       var el = document.getElementById('v-alt');
       if (el) el.textContent = 'Q: ' + qx.toFixed(3)+','+qy.toFixed(3)+','+qz.toFixed(3)+','+qw.toFixed(3);
     }
-    // Normalise quaternion to avoid gimbal lock / 180 flip
+    // Normalise quaternion
     var len = Math.sqrt(qx*qx + qy*qy + qz*qz + qw*qw);
     qx/=len; qy/=len; qz/=len; qw/=len;
 
-    // BCF forward vector is +Y. Rotate +Y by quaternion to get look direction.
-    // Rotated +Y: 
+    // Rotate the default forward vector (0,1,0) = +Y by quaternion
+    // v' = q * v * q^-1
+    // For v=(0,1,0):
     var fwdX = 2*(qx*qy + qw*qz);
     var fwdY = 1 - 2*(qx*qx + qz*qz);
     var fwdZ = 2*(qy*qz - qw*qx);
 
-    // Heading: angle of forward vector in XY plane
-    // +90° corrects BCF Y-forward to Cesium North-up convention
-    // Negate because BCF and Cesium have opposite rotation directions
-    heading = -(Math.atan2(fwdX, fwdY)) + Math.PI/2;
+    // In BCF: X=East, Y=North, Z=Up
+    // Cesium heading: 0=North, PI/2=East (clockwise)
+    // atan2(East, North) gives bearing from North clockwise
+    heading = Math.atan2(fwdX, fwdY);
 
-    // Pitch: elevation angle of forward vector
+    // Pitch: angle above/below horizontal
     pitch = Math.asin(Math.max(-1, Math.min(1, fwdZ)));
 
     roll = 0;
@@ -474,7 +486,8 @@ function flyTo(lon, lat, alt, quat) {
     orientation: { heading: heading, pitch: pitch, roll: roll }
   });
 
-  S.lastPos = [lon, lat];
+  if (posChanged !== false) S.lastPos = [lon, lat, 0, 0];
+  else if (S.lastPos) S.lastPos[0] = S.lastPos[0]; // keep
 }
 </script>
 </body>
