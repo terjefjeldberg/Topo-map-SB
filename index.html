@@ -441,14 +441,15 @@ function flyTo(lon, lat, alt, quat) {
   var heading = 0, pitch = Cesium.Math.toRadians(-45), roll = 0;
   if (quat) {
     var qx=quat.x, qy=quat.y, qz=quat.z, qw=quat.w;
-    // Heading: yaw around Z (up) axis
+    // BCF quaternion: X=East, Y=North, Z=Up
+    // Extract heading (yaw around Z)
     heading = Math.atan2(2*(qw*qz + qx*qy), 1 - 2*(qy*qy + qz*qz));
-    // Pitch: tilt around Y axis (up/down)
+    // Extract pitch (tilt around X)
     var sinP = 2*(qw*qx - qy*qz);
     sinP = Math.max(-1, Math.min(1, sinP));
-    pitch = -Math.asin(sinP);
-    // Roll
-    roll = Math.atan2(2*(qw*qy + qx*qz), 1 - 2*(qx*qx + qy*qy));
+    pitch = Math.asin(sinP) - Math.PI/2;
+    // Force roll = 0 to keep horizon level
+    roll = 0;
   }
 
   // Use setView for instant, no animation — real-time tracking
