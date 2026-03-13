@@ -391,17 +391,8 @@ async function initCesium() {
     var quat = cam.orientation || cam.quaternion;
     if (Array.isArray(quat)) quat = { x: quat[0], y: quat[1], z: quat[2], w: quat[3] };
 
-    // Only update position if moved more than 2 metres — ignore orbit drift
-    var posChanged = true;
-    if (S.lastPos) {
-      var dE = cam.position.easting - S.lastPos[2];
-      var dN = cam.position.northing - S.lastPos[3];
-      var dist = Math.sqrt(dE*dE + dN*dN);
-      if (dist < 10) posChanged = false;
-    }
-
-    flyTo(w.lon, w.lat, alt, quat, posChanged);
-    if (posChanged) S.lastPos = [w.lon, w.lat, cam.position.easting, cam.position.northing];
+    flyTo(w.lon, w.lat, alt, quat);
+    S.lastPos = [w.lon, w.lat, cam.position.easting, cam.position.northing];
 
     document.getElementById('v-lat').textContent = 'LAT  ' + w.lat.toFixed(6) + '°';
     document.getElementById('v-lon').textContent = 'LON  ' + w.lon.toFixed(6) + '°';
@@ -425,7 +416,7 @@ async function initCesium() {
 // Throttle: max 60fps
 var _lastUpdate = 0;
 
-function flyTo(lon, lat, alt, quat, posChanged) {
+function flyTo(lon, lat, alt, quat) {
   if (!S.viewer) return;
   if (isNaN(lon) || isNaN(lat)) return;
 
@@ -435,10 +426,7 @@ function flyTo(lon, lat, alt, quat, posChanged) {
   _lastUpdate = now;
 
   var viewAlt = Math.max(50 - alt, 5);
-  // If only rotating (no position change), keep current destination
-  var dest = (posChanged === false && S.lastPos)
-    ? Cesium.Cartesian3.fromDegrees(S.lastPos[0], S.lastPos[1], viewAlt)
-    : Cesium.Cartesian3.fromDegrees(lon, lat, viewAlt);
+  var dest = Cesium.Cartesian3.fromDegrees(lon, lat, viewAlt);
 
 
 
@@ -485,8 +473,7 @@ function flyTo(lon, lat, alt, quat, posChanged) {
     orientation: { heading: heading, pitch: pitch, roll: roll }
   });
 
-  if (posChanged !== false) S.lastPos = [lon, lat, 0, 0];
-  else if (S.lastPos) S.lastPos[0] = S.lastPos[0]; // keep
+  S.lastPos = [lon, lat];
 }
 </script>
 </body>
