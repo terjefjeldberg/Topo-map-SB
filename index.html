@@ -440,12 +440,10 @@ function flyTo(lon, lat, alt, quat) {
     var qx=quat.x, qy=quat.y, qz=quat.z, qw=quat.w;
     // Heading: yaw around Z (up) axis
     heading = Math.atan2(2*(qw*qz + qx*qy), 1 - 2*(qy*qy + qz*qz));
-    // Pitch: tilt around Y axis (up/down) — negate to fix left/right inversion
+    // Pitch: tilt around Y axis (up/down)
     var sinP = 2*(qw*qx - qy*qz);
     sinP = Math.max(-1, Math.min(1, sinP));
     pitch = -Math.asin(sinP) - Math.PI/2;
-    // Clamp pitch
-    pitch = Math.max(Cesium.Math.toRadians(-90), Math.min(Cesium.Math.toRadians(0), pitch));
     // Roll
     roll = Math.atan2(2*(qw*qy + qx*qz), 1 - 2*(qx*qx + qy*qy));
   }
