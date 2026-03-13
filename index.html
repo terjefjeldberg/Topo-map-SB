@@ -467,15 +467,14 @@
   }
 
   window._onCamera = function(cam) {
-    // StreamBIM delivers position as {lat, lon, alt} in WGS84 — use directly
-    var lat = cam.position.lat;
-    var lon = cam.position.lon;
+    // p[0]=Easting, p[1]=Height, p[2]=Northing in EPSG:5946
+    var w = toWgs84(cam.position.easting, cam.position.northing);
+    if (!w) return;
     var alt = cam.position.alt;
-    if (lat == null) return;
     var quat = cam.orientation || cam.quaternion;
     if (Array.isArray(quat)) quat = { x: quat[0], y: quat[1], z: quat[2], w: quat[3] };
     var hpr = quat ? quatToHPR(quat) : null;
-    flyTo(lon, lat, alt, hpr);
+    flyTo(w.lon, w.lat, Math.max(alt + 200, 200), hpr);
   };
   window._onPick = function(res) {
     var w = toWgs84(res.point.x, res.point.y);
