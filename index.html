@@ -424,10 +424,14 @@ function flyTo(lon, lat, alt, quat) {
   if (now - _lastUpdate < 16) return;
   _lastUpdate = now;
 
-  var viewAlt = Math.max(500 - alt * 2, 200);
-  var dest = Cesium.Cartesian3.fromDegrees(lon, lat, viewAlt);
+  // Place Cesium camera at same height as StreamBIM camera
+  // alt from StreamBIM: negative = above ground, positive = below
+  // Norwegian terrain ~50m above sea level, so add offset
+  var terrainOffset = 50;
+  var viewAlt = -alt + terrainOffset;
+  var dest = Cesium.Cartesian3.fromDegrees(lon, lat, Math.max(viewAlt, 10));
 
-  S.marker.position = Cesium.Cartesian3.fromDegrees(lon, lat, Math.max(-alt + 50, 50));
+  S.marker.position = Cesium.Cartesian3.fromDegrees(lon, lat, Math.max(viewAlt - 5, 5));
   S.marker.show = true;
 
   // Convert BCF quaternion to Cesium HPR
