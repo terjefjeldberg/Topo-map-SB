@@ -398,8 +398,9 @@ async function initCesium() {
       var dN = cam.position.northing - S.lastPos[3];
       var dist = Math.sqrt(dE*dE + dN*dN);
       if (dist > 0.5) {
-        // Heading = direction of travel (atan2 in ENU: East=X, North=Y)
-        computedHeading = Math.atan2(dE, dN);
+        // When orbiting, camera points TOWARD orbit center = opposite of travel direction
+        // So heading = travel direction + 180 degrees
+        computedHeading = Math.atan2(dE, dN) + Math.PI;
       }
     }
     flyTo(w.lon, w.lat, alt, quat, computedHeading);
