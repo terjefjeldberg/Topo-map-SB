@@ -432,22 +432,24 @@
   // Convert BCF/IFC quaternion to Cesium heading+pitch+roll
   // BCF uses: X=East, Y=North, Z=Up. Quaternion rotates camera from default (looking North, level)
   function quatToHPR(q) {
-    // BCF quaternion convention: X=East, Y=North, Z=Up (right-handed)
-    // Remap to Cesium: heading=yaw around Z, pitch=around Y, roll=around X
-    // Swap axes: Cesium X=East, Y=Up, Z=-North
-    var x = q.x, y = q.z, z = -q.y, w = q.w;
+    // StreamBIM BCF quaternion: right-handed, Z-up, X-East, Y-North
+    // Convert to Cesium heading/pitch/roll
+    var x = q.x, y = q.y, z = q.z, w = q.w;
 
-    var sinYcosP = 2*(w*y + x*z);
-    var cosYcosP = 1 - 2*(y*y + z*z);
-    var heading = Math.atan2(sinYcosP, cosYcosP);
+    // Yaw (heading) around Z axis — clockwise from North
+    var sinH = 2*(w*z + x*y);
+    var cosH = 1 - 2*(y*y + z*z);
+    var heading = Math.atan2(sinH, cosH);
 
-    var sinP = 2*(w*x - z*y);
+    // Pitch around X axis — down from horizontal
+    var sinP = 2*(w*y - z*x);
     sinP = Math.max(-1, Math.min(1, sinP));
     var pitch = Math.asin(sinP) - Math.PI/2;
 
-    var sinRcosP = 2*(w*z + y*x);
-    var cosRcosP = 1 - 2*(x*x + y*y);
-    var roll = Math.atan2(sinRcosP, cosRcosP);
+    // Roll around Y axis
+    var sinR = 2*(w*x + y*z);
+    var cosR = 1 - 2*(x*x + z*z);
+    var roll = Math.atan2(sinR, cosR);
 
     return { heading: heading, pitch: pitch, roll: roll };
   }
@@ -470,11 +472,12 @@
 
     // alt = Z from StreamBIM (metres above project datum)
     // Use a sensible minimum height above terrain for visibility
-    var viewHeight = (typeof alt === 'number') ? Math.max(alt + 50, 100) : 500;
+    // alt is height above project datum — add ~50m terrain offset for Norway
+    var viewHeight = (typeof alt === 'number') ? alt + 50 : 200;
     S.viewer.camera.flyTo({
       destination: Cesium.Cartesian3.fromDegrees(lon, lat, viewHeight),
       orientation: orientation,
-      duration: S.lastPos ? 0.4 : 2.0,
+      duration: S.lastPos ? 0.3 : 2.0,
       easingFunction: Cesium.EasingFunction.LINEAR_NONE
     });
     S.lastPos = [lon, lat];
