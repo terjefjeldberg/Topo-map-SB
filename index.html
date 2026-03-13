@@ -1,492 +1,389 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>StreamBIM · Topo Map</title>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Topo map</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;700&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body, #root { width: 100%; height: 100%; overflow: hidden; background: #040d14; }
+  #cesiumViewport { position: absolute; inset: 0; z-index: 0; }
 
-  <!-- ═══════════════════════════════════════════════════════════════
-       CRITICAL: StreamBIM API must be the very first script.
-       StreamBIM.connect() is called synchronously right after —
-       this ensures the Penpal handshake completes before the 5s timeout.
-  ════════════════════════════════════════════════════════════════ -->
-  <script src="./streambim-widget-api.min.js"></script>
-  <script>
-    // Global state accessible by all later code
-    window._sbState = {
-      pending: [],
-      ready: false,
-      epsg: 'EPSG:25832',
-      viewer: null,
-      marker: null,
-      lastPos: null
-    };
+  /* ── top bar ── */
+  #topbar {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 10;
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 14px;
+    background: rgba(4,13,20,0.82);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(0,212,255,0.12);
+    font-family: 'DM Mono', monospace;
+  }
+  #topbar-title {
+    font-family: 'Syne', sans-serif; font-weight: 700;
+    font-size: 13px; letter-spacing: 0.08em; color: #eaf4ff;
+    flex: 1;
+  }
+  #conn-status { font-size: 11px; color: #3a5a7a; white-space: nowrap; }
+  #conn-status.connected { color: #00d4ff; }
 
-    // Connect immediately — synchronously, before any other scripts or DOM
-    window.StreamBIM.connect({
-      cameraChanged: function(cam) {
-        var el = document.getElementById('conn-status');
-        if (el) { el.textContent = '● Connected'; el.style.color = '#00ff9d'; }
-        if (!cam) return;
-        // Position array: [Easting, Height, Northing]
-        var pos = Array.isArray(cam.position) ? cam.position : [cam.position.x, cam.position.y, cam.position.z];
-        cam.position = { easting: pos[0], alt: pos[1], northing: pos[2] };
-        var quat = cam.quaternion || cam.orientation;
-        if (quat && Array.isArray(quat)) {
-          cam.orientation = { x: quat[0], y: quat[1], z: quat[2], w: quat[3] };
-        }
-        // Show coords
-        var coords = document.getElementById('coords');
-        if (coords) coords.style.display = 'block';
-        // Show raw array values BEFORE any conversion
-        var rawPos = Array.isArray(cam.position) ? cam.position : [cam.position.x, cam.position.y, cam.position.z];
-        document.getElementById('coords').style.display = 'block';
-        document.getElementById('v-lat').textContent = 'p[0]=' + rawPos[0];
-        document.getElementById('v-lon').textContent = 'p[1]=' + rawPos[1];
-        document.getElementById('v-alt').textContent = 'p[2]=' + rawPos[2];
-        if (!window._sbState.ready) {
-          window._sbState.pending.push({ type: 'cam', d: cam });
-          return;
-        }
-        window._onCamera(cam);
-      },
-      pickedObject: function(res) {
-        if (!res || !res.point) return;
-        if (!window._sbState.ready) {
-          window._sbState.pending.push({ type: 'pick', d: res });
-          return;
-        }
-        window._onPick(res);
-      }
-    })
-    .then(function() {
-      window._sbState.connected = true;
-      var el = document.getElementById('conn-status');
-      if (el) { el.textContent = '● Connected'; el.style.color = '#00ff9d'; }
-      // Try getting current camera state immediately on connect
-      if (window.StreamBIM.getCameraState) {
-        window.StreamBIM.getCameraState().then(function(cam) {
-          if (cam && window._sbState.ready) window._onCamera(cam);
-          else if (cam) window._sbState.pending.push({ type: 'cam', d: cam });
-        }).catch(function(){});
-      }
-    })
-    .catch(function() {
-      var el = document.getElementById('conn-status');
-      if (el) { el.textContent = '● Not in StreamBIM'; el.style.color = '#ff6b35'; }
-    });
-  </script>
+  .crs-label { font-size: 11px; color: #4a7a9b; }
+  #crs-input {
+    width: 58px; padding: 4px 6px;
+    background: rgba(0,212,255,0.06);
+    border: 1px solid rgba(0,212,255,0.2);
+    color: #00d4ff; font-family: 'DM Mono', monospace; font-size: 11px;
+    outline: none; border-radius: 2px;
+  }
+  #crs-input:focus { border-color: rgba(0,212,255,0.5); background: rgba(0,212,255,0.1); }
+  #crs-select {
+    padding: 4px 6px;
+    background: rgba(0,212,255,0.06);
+    border: 1px solid rgba(0,212,255,0.2);
+    color: #7ab8d4; font-family: 'DM Mono', monospace; font-size: 11px;
+    outline: none; border-radius: 2px; cursor: pointer;
+  }
+  #crs-apply {
+    padding: 4px 10px;
+    background: rgba(0,212,255,0.15);
+    border: 1px solid rgba(0,212,255,0.35);
+    color: #00d4ff; font-family: 'DM Mono', monospace; font-size: 11px;
+    cursor: pointer; border-radius: 2px; letter-spacing: 0.05em;
+    transition: background 0.15s;
+  }
+  #crs-apply:hover { background: rgba(0,212,255,0.28); }
 
-  <link href="https://cdn.jsdelivr.net/npm/cesium@1.136.0/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
+  /* ── coords overlay ── */
+  #coords {
+    position: absolute; bottom: 28px; left: 12px; z-index: 10;
+    display: none;
+    font-family: 'DM Mono', monospace; font-size: 10px;
+    color: #00d4ff; line-height: 1.8;
+    background: rgba(4,13,20,0.7);
+    padding: 6px 10px; border-radius: 2px;
+    border-left: 2px solid rgba(0,212,255,0.4);
+  }
 
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap');
+  /* ── setup overlay ── */
+  #setup-overlay {
+    position: absolute; inset: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(4,13,20,0.92);
+    backdrop-filter: blur(16px);
+  }
+  .setup-card {
+    width: 320px;
+    border: 1px solid rgba(0,212,255,0.2);
+    background: rgba(8,20,32,0.95);
+    padding: 28px;
+  }
+  .setup-card h2 {
+    font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 700;
+    color: #eaf4ff; letter-spacing: 0.06em; margin-bottom: 6px;
+  }
+  .setup-card p {
+    font-family: 'DM Mono', monospace; font-size: 11px;
+    color: #4a7a9b; line-height: 1.7; margin-bottom: 18px;
+  }
+  .epsg-row {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
+  }
+  .epsg-row span {
+    font-family: 'DM Mono', monospace; font-size: 12px; color: #4a7a9b;
+  }
+  #epsg-input {
+    flex: 1; padding: 7px 10px;
+    background: rgba(0,212,255,0.06);
+    border: 1px solid rgba(0,212,255,0.2);
+    color: #00d4ff; font-family: 'DM Mono', monospace; font-size: 12px;
+    outline: none; border-radius: 2px;
+  }
+  #epsg-input:focus { border-color: rgba(0,212,255,0.5); }
+  .presets {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px;
+  }
+  .p-btn {
+    padding: 4px 10px;
+    border: 1px solid rgba(0,212,255,0.2);
+    background: rgba(0,212,255,0.04);
+    color: #4a9ab4; font-family: 'DM Mono', monospace; font-size: 10px;
+    cursor: pointer; border-radius: 2px; transition: all 0.15s;
+  }
+  .p-btn:hover { background: rgba(0,212,255,0.14); color: #00d4ff; border-color: rgba(0,212,255,0.4); }
+  .go-btn {
+    width: 100%; padding: 10px;
+    background: rgba(0,212,255,0.15);
+    border: 1px solid rgba(0,212,255,0.4);
+    color: #00d4ff; font-family: 'DM Mono', monospace;
+    font-size: 12px; letter-spacing: 0.12em;
+    cursor: pointer; border-radius: 2px;
+    transition: background 0.15s;
+  }
+  .go-btn:hover { background: rgba(0,212,255,0.28); }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-
-    html, body {
-      width: 100%; height: 100%;
-      overflow: hidden;
-      background: #050810;
-    }
-
-    #cesiumViewport {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100vw !important;
-      height: 100vh !important;
-    }
-
-    #cesiumViewport .cesium-viewer,
-    #cesiumViewport .cesium-viewer-cesiumWidgetContainer,
-    #cesiumViewport .cesium-widget,
-    #cesiumViewport canvas {
-      position: absolute !important;
-      top: 0 !important; left: 0 !important;
-      width: 100% !important;
-      height: 100% !important;
-    }
-
-    /* ── Floating top bar ── */
-    #topbar {
-      position: fixed; top: 0; left: 0; right: 0;
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 8px 12px;
-      background: rgba(10,14,20,0.75);
-      backdrop-filter: blur(10px);
-      border-bottom: 1px solid rgba(255,255,255,0.07);
-      z-index: 100;
-      font-family: 'DM Mono', monospace;
-    }
-
-    #conn-status {
-      font-size: 11px;
-      color: #5a7a94;
-      letter-spacing: 0.04em;
-    }
-
-    /* CRS input row */
-    #crs-row { display: flex; align-items: center; gap: 6px; }
-    #crs-input {
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.12);
-      border-radius: 5px;
-      color: #eaf4ff;
-      font-family: 'DM Mono', monospace;
-      font-size: 11px;
-      padding: 4px 8px;
-      width: 110px;
-      outline: none;
-    }
-    #crs-input:focus { border-color: #00d4ff; }
-    #crs-apply {
-      padding: 4px 10px;
-      background: transparent;
-      border: 1px solid #00d4ff;
-      border-radius: 5px;
-      color: #00d4ff;
-      font-family: 'DM Mono', monospace;
-      font-size: 11px;
-      cursor: pointer;
-      transition: background 0.15s, color 0.15s;
-    }
-    #crs-apply:hover { background: #00d4ff; color: #050810; }
-
-    /* ── Floating coords bottom-left ── */
-    #coords {
-      position: fixed; bottom: 12px; left: 12px;
-      background: rgba(10,14,20,0.78);
-      backdrop-filter: blur(8px);
-      border: 1px solid rgba(255,255,255,0.07);
-      border-radius: 7px;
-      padding: 8px 12px;
-      font-family: 'DM Mono', monospace;
-      font-size: 11px;
-      color: #5a7a94;
-      z-index: 100;
-      line-height: 1.8;
-      display: none;
-    }
-    #coords span { color: #00d4ff; margin-left: 6px; }
-
-    /* ── Setup overlay ── */
-    #setup-overlay {
-      position: fixed; inset: 0;
-      background: rgba(5,8,16,0.92);
-      display: flex; align-items: center; justify-content: center;
-      z-index: 200;
-      backdrop-filter: blur(8px);
-    }
-    #setup-overlay.hidden { display: none; }
-
-    .setup-card {
-      background: #111720;
-      border: 1px solid #1e2d3d;
-      border-radius: 12px;
-      padding: 28px 32px;
-      width: 320px;
-      max-width: 92vw;
-      font-family: 'DM Mono', monospace;
-    }
-    .setup-card h2 {
-      font-size: 14px; font-weight: 500;
-      color: #eaf4ff; margin-bottom: 6px;
-      letter-spacing: 0.03em;
-    }
-    .setup-card p { font-size: 11px; color: #5a7a94; line-height: 1.7; margin-bottom: 16px; }
-
-    #epsg-input {
-      width: 100%;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid #1e2d3d;
-      border-radius: 6px;
-      color: #eaf4ff;
-      font-family: 'DM Mono', monospace;
-      font-size: 16px;
-      padding: 10px 12px;
-      text-align: center;
-      outline: none;
-      margin-bottom: 10px;
-      transition: border-color 0.2s;
-    }
-    #epsg-input:focus { border-color: #00d4ff; }
-
-    .presets { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 16px; }
-    .p-btn {
-      padding: 3px 9px; font-size: 10px;
-      background: rgba(255,255,255,0.03);
-      border: 1px solid #1e2d3d;
-      border-radius: 4px; color: #5a7a94;
-      cursor: pointer; transition: all 0.12s;
-    }
-    .p-btn:hover { border-color: #00d4ff; color: #00d4ff; }
-
-    .go-btn {
-      width: 100%; padding: 10px;
-      border: 1px solid #00d4ff;
-      background: transparent; color: #00d4ff;
-      font-family: 'DM Mono', monospace;
-      font-size: 12px; letter-spacing: 0.08em;
-      border-radius: 6px; cursor: pointer;
-      transition: background 0.15s, color 0.15s;
-    }
-    .go-btn:hover { background: #00d4ff; color: #050810; }
-    .sim-btn {
-      width: 100%; padding: 7px; margin-top: 6px;
-      border: 1px solid #1e2d3d;
-      background: transparent; color: #5a7a94;
-      font-family: 'DM Mono', monospace;
-      font-size: 10px; letter-spacing: 0.06em;
-      border-radius: 6px; cursor: pointer;
-      transition: background 0.15s, color 0.15s;
-    }
-    .sim-btn:hover { background: #1e2d3d; color: #eaf4ff; }
-
-    /* Loading spinner */
-    #loading {
-      position: fixed; inset: 0;
-      display: none; align-items: center; justify-content: center;
-      flex-direction: column; gap: 12px;
-      background: #050810;
-      z-index: 150;
-      font-family: 'DM Mono', monospace;
-      font-size: 11px; color: #5a7a94;
-    }
-    #loading.show { display: flex; }
-    .spin {
-      width: 26px; height: 26px;
-      border: 2px solid #1e2d3d; border-top-color: #00d4ff;
-      border-radius: 50%; animation: spin 0.7s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    #load-msg { color: #5a7a94; }
-  </style>
+  /* ── loading screen ── */
+  #loading-screen {
+    position: absolute; inset: 0; z-index: 15;
+    display: none; align-items: center; justify-content: center;
+    background: rgba(4,13,20,0.92); backdrop-filter: blur(16px);
+    font-family: 'DM Mono', monospace;
+  }
+  .loading-inner { text-align: center; }
+  .loading-inner .dot-anim {
+    display: inline-block; width: 6px; height: 6px;
+    background: #00d4ff; border-radius: 50%;
+    animation: pulse 1s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:0.2} 50%{opacity:1} }
+  #log-list {
+    margin-top: 14px; font-size: 10px; color: #3a6a8a;
+    max-height: 120px; overflow-y: auto; text-align: left; width: 260px;
+  }
+  #log-list div { padding: 2px 0; }
+  #log-list .ok { color: #00d4ff; }
+  #log-list .warn { color: #f0a030; }
+  #log-list .err { color: #f04040; }
+</style>
 </head>
 <body>
 
-<!-- Fullscreen Cesium -->
+<!-- StreamBIM API — must be first, before anything else -->
+<script src="./streambim-widget-api.min.js"></script>
+<script>
+// ── Global state ──
+window._sbState = {
+  epsg: 'EPSG:5946',
+  pending: [], ready: false,
+  viewer: null, marker: null, lastPos: null
+};
+var S = window._sbState;
+
+// ── TM parameters for Norwegian NTM and UTM zones ──
+var _tmParams = {
+  'EPSG:5941': { lon0: 6.5,  lat0: 58, x0: 100000, y0: 1000000 },
+  'EPSG:5942': { lon0: 7.5,  lat0: 58, x0: 100000, y0: 1000000 },
+  'EPSG:5943': { lon0: 8.5,  lat0: 58, x0: 100000, y0: 1000000 },
+  'EPSG:5944': { lon0: 9.5,  lat0: 58, x0: 100000, y0: 1000000 },
+  'EPSG:5945': { lon0: 10.5, lat0: 58, x0: 100000, y0: 1000000 },
+  'EPSG:5946': { lon0: 6.5,  lat0: 58, x0: 100000, y0: 1000000 },
+  'EPSG:5947': { lon0: 7.5,  lat0: 58, x0: 100000, y0: 1000000 },
+  'EPSG:5948': { lon0: 8.5,  lat0: 58, x0: 100000, y0: 1000000 },
+  'EPSG:5949': { lon0: 9.5,  lat0: 58, x0: 100000, y0: 1000000 },
+  'EPSG:5950': { lon0: 10.5, lat0: 58, x0: 100000, y0: 1000000 },
+  'EPSG:5545': { lon0: 18.0, lat0: 0,  x0: 500000, y0: 0 },
+  'EPSG:25832': { lon0: 9.0,  lat0: 0,  x0: 500000, y0: 0 },
+  'EPSG:25833': { lon0: 15.0, lat0: 0,  x0: 500000, y0: 0 },
+  'EPSG:32632': { lon0: 9.0,  lat0: 0,  x0: 500000, y0: 0 },
+  'EPSG:32633': { lon0: 15.0, lat0: 0,  x0: 500000, y0: 0 }
+};
+
+function toWgs84(easting, northing) {
+  var epsgKey = S.epsg ? S.epsg.toString().trim().toUpperCase() : '';
+  if (epsgKey.indexOf('EPSG:') === -1) epsgKey = 'EPSG:' + epsgKey.replace('EPSG','').trim();
+  var p = _tmParams[epsgKey] || _tmParams['EPSG:5946'];
+  var a=6378137.0, f=1/298.257222101;
+  var b=a*(1-f), e2=1-(b/a)*(b/a), k0=1.0;
+  var lon0=p.lon0*Math.PI/180, lat0=p.lat0*Math.PI/180;
+  var x=easting-p.x0, y=northing-p.y0;
+  var A0=1-e2/4-3*e2*e2/64-5*e2*e2*e2/256;
+  var A2=3/8*(e2+e2*e2/4+15*e2*e2*e2/128);
+  var A4=15/256*(e2*e2+3*e2*e2*e2/4);
+  var A6=35*e2*e2*e2/3072;
+  var M0=a*(A0*lat0-A2*Math.sin(2*lat0)+A4*Math.sin(4*lat0)-A6*Math.sin(6*lat0));
+  var M=M0+y/k0, mu=M/(a*A0);
+  var e1=(1-Math.sqrt(1-e2))/(1+Math.sqrt(1-e2));
+  var lat_fp=mu+(3*e1/2-27*e1*e1*e1/32)*Math.sin(2*mu)
+    +(21*e1*e1/16-55*e1*e1*e1*e1/32)*Math.sin(4*mu)
+    +(151*e1*e1*e1/96)*Math.sin(6*mu)
+    +(1097*e1*e1*e1*e1/512)*Math.sin(8*mu);
+  var sinFP=Math.sin(lat_fp), cosFP=Math.cos(lat_fp), tanFP=Math.tan(lat_fp);
+  var N1=a/Math.sqrt(1-e2*sinFP*sinFP);
+  var T1=tanFP*tanFP, C1=e2/(1-e2)*cosFP*cosFP;
+  var R1=a*(1-e2)/Math.pow(1-e2*sinFP*sinFP,1.5);
+  var D=x/(N1*k0);
+  var lat=lat_fp-(N1*tanFP/R1)*(D*D/2-(5+3*T1+10*C1-4*C1*C1-9*e2/(1-e2))*D*D*D*D/24);
+  var lon=lon0+(D-(1+2*T1+C1)*D*D*D/6)/cosFP;
+  return { lat: lat*180/Math.PI, lon: lon*180/Math.PI };
+}
+
+// ── StreamBIM connect — must happen synchronously on page load ──
+window.StreamBIM.connect({
+  cameraChanged: function(cam) {
+    var el = document.getElementById('conn-status');
+    if (el) { el.textContent = '● Connected'; el.className = 'connected'; }
+    if (!cam) return;
+    var pos = Array.isArray(cam.position)
+      ? cam.position
+      : [cam.position.x, cam.position.y, cam.position.z];
+    cam.position = { easting: pos[0], alt: pos[1], northing: pos[2] };
+    var quat = cam.quaternion || cam.orientation;
+    if (quat && Array.isArray(quat))
+      cam.orientation = { x: quat[0], y: quat[1], z: quat[2], w: quat[3] };
+
+    // Update coords display
+    var coords = document.getElementById('coords');
+    if (coords) coords.style.display = 'block';
+    var vl = document.getElementById('v-lat');
+    var vn = document.getElementById('v-lon');
+    var va = document.getElementById('v-alt');
+    if (vl) vl.textContent = 'E  ' + cam.position.easting.toFixed(1);
+    if (vn) vn.textContent = 'N  ' + cam.position.northing.toFixed(1);
+    if (va) va.textContent = 'H  ' + cam.position.alt.toFixed(1) + ' m';
+
+    if (!S.ready) { S.pending.push({ type: 'cam', d: cam }); return; }
+    window._onCamera(cam);
+  },
+  pickedObject: function(res) {
+    if (!res || !res.point) return;
+    if (!S.ready) { S.pending.push({ type: 'pick', d: res }); return; }
+    window._onPick(res);
+  }
+}).then(function() {
+  S.connected = true;
+}).catch(function(e) {
+  var el = document.getElementById('conn-status');
+  if (el) { el.textContent = '● Disconnected'; el.style.color = '#f04040'; }
+});
+</script>
+
+<!-- Cesium CSS -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cesium@1.136.0/Build/Cesium/Widgets/widgets.css"/>
+
+<!-- Fullscreen Cesium viewport -->
 <div id="cesiumViewport"></div>
 
-<!-- Floating top bar -->
+<!-- Top bar -->
 <div id="topbar">
-  <span id="conn-status" style="color:#5a7a94">● Connecting…</span>
-  <div id="crs-row">
-    <span style="color:#7a9ab5;font-size:11px;font-family:'DM Mono',monospace">EPSG:</span>
-    <input id="crs-input" type="number" placeholder="5946" style="width:64px" />
-    <select id="crs-select" onchange="if(this.value){document.getElementById('crs-input').value=this.value;this.value=''}">
-      <option value="">presets…</option>
-      <option value="5946">5946 – NTM 6</option>
-      <option value="5945">5945 – NTM 5</option>
-      <option value="5947">5947 – NTM 7</option>
-      <option value="5545">5545 – UTM zone 45N</option>
-      <option value="25832">25832 – UTM 32N</option>
-      <option value="25833">25833 – UTM 33N</option>
-    </select>
-    <button id="crs-apply" onclick="changeCRS()">Apply</button>
-  </div>
+  <span id="topbar-title">TOPO MAP</span>
+  <span id="conn-status">● Connecting…</span>
+  <span class="crs-label">EPSG:</span>
+  <input id="crs-input" type="number" placeholder="5946" value="5946"/>
+  <select id="crs-select" onchange="if(this.value){document.getElementById('crs-input').value=this.value;this.value=''}">
+    <option value="">presets…</option>
+    <option value="5946">5946 – NTM 6</option>
+    <option value="5945">5945 – NTM 5</option>
+    <option value="5947">5947 – NTM 7</option>
+    <option value="5545">5545</option>
+    <option value="25832">25832 – UTM 32N</option>
+    <option value="25833">25833 – UTM 33N</option>
+  </select>
+  <button id="crs-apply" onclick="changeCRS()">Apply</button>
 </div>
 
-<!-- Floating coords -->
+<!-- Coords overlay -->
 <div id="coords">
-  LAT<span id="v-lat">—</span><br>
-  LON<span id="v-lon">—</span><br>
-  ALT<span id="v-alt">—</span>
+  LAT <span id="v-lat">—</span><br>
+  LON <span id="v-lon">—</span><br>
+  ALT <span id="v-alt">—</span>
 </div>
-
-<!-- Loading screen -->
-<div id="loading"><div class="spin"></div><div id="load-msg">Loading…</div></div>
 
 <!-- Setup overlay -->
 <div id="setup-overlay">
   <div class="setup-card">
-    <h2>Project CRS</h2>
-    <p>Enter the EPSG code from your StreamBIM project settings.</p>
-    <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px">
-      <span style="color:#7a9ab5;font-family:'DM Mono',monospace;font-size:13px">EPSG:</span>
-      <input id="epsg-input" type="number" value="5946" placeholder="e.g. 5946" style="flex:1" />
+    <h2>TOPO MAP</h2>
+    <p>Select your project CRS from the presets or enter the EPSG code manually.</p>
+    <div class="epsg-row">
+      <span>EPSG:</span>
+      <input id="epsg-input" type="number" value="5946" placeholder="5946"/>
     </div>
     <div class="presets">
-      <div class="p-btn" onclick="sp('5946')">NTM 6 (5946)</div>
+      <div class="p-btn" onclick="sp('5946')">NTM 6 — 5946</div>
+      <div class="p-btn" onclick="sp('5945')">NTM 5 — 5945</div>
+      <div class="p-btn" onclick="sp('5947')">NTM 7 — 5947</div>
       <div class="p-btn" onclick="sp('5545')">5545</div>
       <div class="p-btn" onclick="sp('25832')">UTM 32N</div>
       <div class="p-btn" onclick="sp('25833')">UTM 33N</div>
-      <div class="p-btn" onclick="sp('5945')">NTM 5</div>
-      <div class="p-btn" onclick="sp('5947')">NTM 7</div>
     </div>
-    <button class="go-btn" onclick="startWidget(false)">OPEN MAP</button>
-    <button class="sim-btn" onclick="startWidget(true)">simulation mode</button>
+    <button class="go-btn" onclick="startWidget()">OPEN MAP</button>
+  </div>
+</div>
+
+<!-- Loading screen -->
+<div id="loading-screen">
+  <div class="loading-inner">
+    <span class="dot-anim"></span>
+    <div id="log-list"></div>
   </div>
 </div>
 
 <script>
-  var S = window._sbState;
+function sp(code) {
+  document.getElementById('epsg-input').value = code;
+}
 
-  // Hardcoded proj4 definitions for common Norwegian CRS
-  // These are used as fallback if epsg.io fetch fails or returns bad data
-  var _knownCRS = {
-    'EPSG:5941': '+proj=tmerc +lat_0=58 +lon_0=5.5 +k=1 +x_0=100000 +y_0=1000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
-    'EPSG:5942': '+proj=tmerc +lat_0=58 +lon_0=6.5 +k=1 +x_0=100000 +y_0=1000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
-    'EPSG:5943': '+proj=tmerc +lat_0=58 +lon_0=7.5 +k=1 +x_0=100000 +y_0=1000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
-    'EPSG:5944': '+proj=tmerc +lat_0=58 +lon_0=8.5 +k=1 +x_0=100000 +y_0=1000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
-    'EPSG:5945': '+proj=tmerc +lat_0=58 +lon_0=9.5 +k=1 +x_0=100000 +y_0=1000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
-    'EPSG:5946': '+proj=tmerc +lat_0=58 +lon_0=10.5 +k=1 +x_0=100000 +y_0=1000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
-    'EPSG:5947': '+proj=tmerc +lat_0=58 +lon_0=11.5 +k=1 +x_0=100000 +y_0=1000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
-    'EPSG:5948': '+proj=tmerc +lat_0=58 +lon_0=12.5 +k=1 +x_0=100000 +y_0=1000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
-    'EPSG:5949': '+proj=tmerc +lat_0=58 +lon_0=13.5 +k=1 +x_0=100000 +y_0=1000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
-    'EPSG:5950': '+proj=tmerc +lat_0=58 +lon_0=14.5 +k=1 +x_0=100000 +y_0=1000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs',
-    'EPSG:25832': '+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs',
-    'EPSG:25833': '+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs',
-    'EPSG:32632': '+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs',
-    'EPSG:32633': '+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs'
-  };
+function _log(msg, cls) {
+  var el = document.getElementById('log-list');
+  if (!el) return;
+  var d = document.createElement('div');
+  d.textContent = '› ' + msg;
+  if (cls) d.className = cls;
+  el.appendChild(d);
+  el.scrollTop = el.scrollHeight;
+}
 
-  function registerKnownCRS(epsg) {
-    if (_knownCRS[epsg] && !proj4.defs(epsg)) {
-      proj4.defs(epsg, _knownCRS[epsg]);
-      return true;
+function changeCRS() {
+  var raw = document.getElementById('crs-input').value.trim();
+  if (raw) {
+    S.epsg = 'EPSG:' + raw.replace(/epsg:/i,'').trim();
+    document.getElementById('crs-input').value = raw.replace(/epsg:/i,'').trim();
+  }
+}
+
+function startWidget() {
+  var raw = document.getElementById('epsg-input').value.trim() || '5946';
+  S.epsg = 'EPSG:' + raw.replace(/epsg:/i,'').trim();
+  document.getElementById('setup-overlay').style.display = 'none';
+  document.getElementById('loading-screen').style.display = 'flex';
+  document.getElementById('crs-input').value = raw.replace(/epsg:/i,'').trim();
+  loadScripts();
+}
+
+function loadScripts() {
+  _log('Loading Cesium…');
+  var s = document.createElement('script');
+  s.src = 'https://cdn.jsdelivr.net/npm/cesium@1.136.0/Build/Cesium/Cesium.js';
+  s.onload = function() { _log('Cesium ready', 'ok'); initCesium(); };
+  s.onerror = function() { _log('Cesium failed to load', 'err'); };
+  document.head.appendChild(s);
+}
+
+function initCesium() {
+  _log('Initialising globe…');
+  Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlOGNmZDViOS0wZWYwLTQ1ZjktODkwZS0wNGJiODM4YTdjM2EiLCJpZCI6NDAyNDEwLCJpYXQiOjE3NzMzMDk4OTd9.yqBK0ZLNU-S9J2K-0xxMWc34Kzdlb0oCxgNOY4ADGDs';
+
+  var viewer = new Cesium.Viewer('cesiumViewport', {
+    terrainProvider: Cesium.createWorldTerrain(),
+    baseLayerPicker: false,
+    navigationHelpButton: false,
+    sceneModePicker: false,
+    geocoder: false,
+    homeButton: false,
+    fullscreenButton: false,
+    animation: false,
+    timeline: false,
+    infoBox: false,
+    selectionIndicator: false,
+    creditContainer: document.createElement('div')
+  });
+
+  S.viewer = viewer;
+
+  // Red box marker for camera position
+  S.marker = viewer.entities.add({
+    position: Cesium.Cartesian3.fromDegrees(0, 0, 0),
+    show: false,
+    box: {
+      dimensions: new Cesium.Cartesian3(20, 20, 20),
+      material: Cesium.Color.RED.withAlpha(0.85)
     }
-    return false;
-  }
+  });
 
-  function sp(e) { document.getElementById('epsg-input').value = e; }
-  function setMsg(m) { document.getElementById('load-msg').textContent = m; }
+  _log('Globe ready', 'ok');
+  document.getElementById('loading-screen').style.display = 'none';
 
-  function changeCRS() {
-    var v = document.getElementById('crs-input').value.trim();
-    if (!v) return;
-    loadEPSG(v, function(err) {
-      if (err) { console.warn(err); return; }
-      S.epsg = v;
-    });
-  }
-
-  function loadEPSG(epsg, cb) {
-    if (typeof proj4 === 'undefined') { cb('proj4 not loaded yet'); return; }
-    // Always register our known-good definitions first (overrides proj4 builtins)
-    registerKnownCRS(epsg);
-    if (proj4.defs(epsg)) { cb(null); return; }
-    // Fall back to epsg.io fetch
-    var code = epsg.replace('EPSG:','');
-    fetch('https://epsg.io/' + code + '.proj4')
-      .then(function(r){ return r.text(); })
-      .then(function(def){
-        if (!def || def.indexOf('+proj') === -1) { cb('Unknown EPSG: ' + epsg); return; }
-        proj4.defs(epsg, def);
-        cb(null);
-      })
-      .catch(function(e){ cb(e.message); });
-  }
-
-  // NTM/UTM inverse Transverse Mercator — pure JS, no proj4 needed
-  var _tmParams = {
-    'EPSG:5941': { lon0: 6.5,  lat0: 58, x0: 100000, y0: 1000000 },
-    'EPSG:5942': { lon0: 7.5,  lat0: 58, x0: 100000, y0: 1000000 },
-    'EPSG:5943': { lon0: 8.5,  lat0: 58, x0: 100000, y0: 1000000 },
-    'EPSG:5944': { lon0: 9.5,  lat0: 58, x0: 100000, y0: 1000000 },
-    'EPSG:5945': { lon0: 10.5, lat0: 58, x0: 100000, y0: 1000000 },
-    'EPSG:5946': { lon0: 6.5,  lat0: 58, x0: 100000, y0: 1000000 },
-    'EPSG:5947': { lon0: 7.5,  lat0: 58, x0: 100000, y0: 1000000 },
-    'EPSG:5948': { lon0: 8.5,  lat0: 58, x0: 100000, y0: 1000000 },
-    'EPSG:25832': { lon0: 9.0,  lat0: 0,  x0: 500000, y0: 0 },
-    'EPSG:25833': { lon0: 15.0, lat0: 0,  x0: 500000, y0: 0 },
-    'EPSG:32632': { lon0: 9.0,  lat0: 0,  x0: 500000, y0: 0 },
-    'EPSG:32633': { lon0: 15.0, lat0: 0,  x0: 500000, y0: 0 }
-  };
-
-  function toWgs84(easting, northing) {
-    var epsgKey = S.epsg ? S.epsg.toString().trim().toUpperCase() : '';
-    if (epsgKey.indexOf('EPSG:') === -1) epsgKey = 'EPSG:' + epsgKey.replace('EPSG','').trim();
-    var p = _tmParams[epsgKey];
-    if (!p) {
-      console.warn('No TM params for', epsgKey, '- defaulting to EPSG:5946');
-      p = _tmParams['EPSG:5946'];
-    }
-    var a = 6378137.0, f = 1/298.257222101;
-    var b = a*(1-f), e2 = 1-(b/a)*(b/a), k0 = 1.0;
-    var lon0 = p.lon0 * Math.PI/180;
-    var lat0 = p.lat0 * Math.PI/180;
-    var x = easting - p.x0, y = northing - p.y0;
-    var A0 = 1-e2/4-3*e2*e2/64-5*e2*e2*e2/256;
-    var A2 = 3/8*(e2+e2*e2/4+15*e2*e2*e2/128);
-    var A4 = 15/256*(e2*e2+3*e2*e2*e2/4);
-    var A6 = 35*e2*e2*e2/3072;
-    var M0 = a*(A0*lat0 - A2*Math.sin(2*lat0) + A4*Math.sin(4*lat0) - A6*Math.sin(6*lat0));
-    var M = M0 + y/k0;
-    var mu = M/(a*A0);
-    var e1 = (1-Math.sqrt(1-e2))/(1+Math.sqrt(1-e2));
-    var lat_fp = mu + (3*e1/2-27*e1*e1*e1/32)*Math.sin(2*mu)
-               + (21*e1*e1/16-55*e1*e1*e1*e1/32)*Math.sin(4*mu)
-               + (151*e1*e1*e1/96)*Math.sin(6*mu)
-               + (1097*e1*e1*e1*e1/512)*Math.sin(8*mu);
-    var sinFP = Math.sin(lat_fp), cosFP = Math.cos(lat_fp), tanFP = Math.tan(lat_fp);
-    var N1 = a/Math.sqrt(1-e2*sinFP*sinFP);
-    var T1 = tanFP*tanFP;
-    var C1 = e2/(1-e2)*cosFP*cosFP;
-    var R1 = a*(1-e2)/Math.pow(1-e2*sinFP*sinFP, 1.5);
-    var D = x/(N1*k0);
-    var lat = lat_fp - (N1*tanFP/R1)*(D*D/2-(5+3*T1+10*C1-4*C1*C1-9*e2/(1-e2))*D*D*D*D/24);
-    var lon = lon0 + (D-(1+2*T1+C1)*D*D*D/6)/cosFP;
-    return { lat: lat*180/Math.PI, lon: lon*180/Math.PI };
-  }
-
-  // Convert BCF/IFC quaternion to Cesium heading+pitch+roll
-  // BCF uses: X=East, Y=North, Z=Up. Quaternion rotates camera from default (looking North, level)
-  function quatToHPR(q) {
-    // StreamBIM BCF quaternion: right-handed, Z-up, X-East, Y-North
-    // Convert to Cesium heading/pitch/roll
-    var x = q.x, y = q.y, z = q.z, w = q.w;
-
-    // Yaw (heading) around Z axis — clockwise from North
-    var sinH = 2*(w*z + x*y);
-    var cosH = 1 - 2*(y*y + z*z);
-    var heading = Math.atan2(sinH, cosH);
-
-    // Pitch around X axis — down from horizontal
-    var sinP = 2*(w*y - z*x);
-    sinP = Math.max(-1, Math.min(1, sinP));
-    var pitch = Math.asin(sinP) - Math.PI/2;
-
-    // Roll around Y axis
-    var sinR = 2*(w*x + y*z);
-    var cosR = 1 - 2*(x*x + z*z);
-    var roll = Math.atan2(sinR, cosR);
-
-    return { heading: heading, pitch: pitch, roll: roll };
-  }
-
-  function flyTo(lon, lat, alt, hpr) {
-    if (!S.viewer) return;
-    if (isNaN(lon) || isNaN(lat) || isNaN(alt)) { console.warn('flyTo got NaN', lon, lat, alt); return; }
-    S.marker.position = Cesium.Cartesian3.fromDegrees(lon, lat, alt||0);
-    S.marker.show = true;
-
-    var orientation = hpr ? {
-      heading: hpr.heading,
-      pitch: hpr.pitch,
-      roll: hpr.roll
-    } : {
-      heading: 0,
-      pitch: Cesium.Math.toRadians(-55),
-      roll: 0
-    };
-
-    // alt = Z from StreamBIM (metres above project datum)
-    // Use a sensible minimum height above terrain for visibility
-    // alt is height above project datum — add ~50m terrain offset for Norway
-    var viewHeight = (typeof alt === 'number') ? alt + 50 : 200;
-    S.viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(lon, lat, viewHeight),
-      orientation: orientation,
-      duration: S.lastPos ? 0.3 : 2.0,
-      easingFunction: Cesium.EasingFunction.LINEAR_NONE
-    });
-    S.lastPos = [lon, lat];
-    document.getElementById('coords').style.display = 'block';
-    document.getElementById('v-lat').textContent = lat.toFixed(6) + '°';
-    document.getElementById('v-lon').textContent = lon.toFixed(6) + '°';
-    document.getElementById('v-alt').textContent = (alt||0).toFixed(1) + ' m';
-  }
-
+  // Define camera handlers
   window._onCamera = function(cam) {
     var w = toWgs84(cam.position.easting, cam.position.northing);
     if (!w) return;
@@ -494,99 +391,69 @@
     var quat = cam.orientation || cam.quaternion;
     if (Array.isArray(quat)) quat = { x: quat[0], y: quat[1], z: quat[2], w: quat[3] };
     flyTo(w.lon, w.lat, alt, quat);
+
+    // Update coords display with converted WGS84
+    document.getElementById('v-lat').textContent = 'LAT  ' + w.lat.toFixed(6) + '°';
+    document.getElementById('v-lon').textContent = 'LON  ' + w.lon.toFixed(6) + '°';
+    document.getElementById('v-alt').textContent = 'ALT  ' + alt.toFixed(1) + ' m';
   };
+
   window._onPick = function(res) {
-    var w = toWgs84(res.point.x, res.point.y);
-    if (w) flyTo(w.lon, w.lat, res.point.z);
+    var w = toWgs84(res.point[0], res.point[2]);
+    if (w) flyTo(w.lon, w.lat, res.point[1], null);
   };
 
-  function initCesium(cb) {
-    Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlOGNmZDViOS0wZWYwLTQ1ZjktODkwZS0wNGJiODM4YTdjM2EiLCJpZCI6NDAyNDEwLCJpYXQiOjE3NzMzMDk4OTd9.yqBK0ZLNU-S9J2K-0xxMWc34Kzdlb0oCxgNOY4ADGDs';
-    S.viewer = new Cesium.Viewer('cesiumViewport', {
-      terrain: Cesium.Terrain.fromWorldTerrain({ requestVertexNormals: true }),
-      baseLayerPicker: false, geocoder: false, homeButton: false,
-      sceneModePicker: false, navigationHelpButton: false,
-      animation: false, timeline: false, fullscreenButton: false,
-      infoBox: false, selectionIndicator: false
-    });
-    S.viewer.scene.globe.enableLighting = true;
-    S.marker = S.viewer.entities.add({
-      position: Cesium.Cartesian3.fromDegrees(0,0),
-      ellipse: {
-        semiMinorAxis: 8, semiMajorAxis: 8,
-        material: new Cesium.ColorMaterialProperty(Cesium.Color.fromCssColorString('#00d4ff').withAlpha(0.9)),
-        outline: true, outlineColor: Cesium.Color.WHITE.withAlpha(0.6), outlineWidth: 2,
-        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
-      },
-      label: {
-        text: '▲ You', font: '500 11px DM Mono',
-        fillColor: Cesium.Color.fromCssColorString('#eaf4ff'),
-        outlineColor: Cesium.Color.BLACK, outlineWidth: 2,
-        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-        verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-        pixelOffset: new Cesium.Cartesian2(0, -14),
-        heightReference: Cesium.HeightReference.CLAMP_TO_GROUND
-      },
-      show: false
-    });
-    document.getElementById('loading').classList.remove('show');
-    // Force Cesium to resize canvas to actual window dimensions
-    S.viewer.resize();
-    window.addEventListener('resize', function() { S.viewer.resize(); });
-    if (cb) cb();
+  // Flush pending events
+  S.ready = true;
+  S.pending.forEach(function(e) {
+    if (e.type === 'cam') window._onCamera(e.d);
+    else if (e.type === 'pick') window._onPick(e.d);
+  });
+  S.pending = [];
+}
+
+// Throttle: max 60fps
+var _lastUpdate = 0;
+
+function flyTo(lon, lat, alt, quat) {
+  if (!S.viewer) return;
+  if (isNaN(lon) || isNaN(lat)) return;
+
+  // Throttle to ~60fps
+  var now = Date.now();
+  if (now - _lastUpdate < 16) return;
+  _lastUpdate = now;
+
+  var viewAlt = Math.max(500 - alt * 2, 200);
+  var dest = Cesium.Cartesian3.fromDegrees(lon, lat, viewAlt);
+
+  S.marker.position = Cesium.Cartesian3.fromDegrees(lon, lat, Math.max(-alt + 50, 50));
+  S.marker.show = true;
+
+  // Convert BCF quaternion to Cesium HPR
+  var heading = 0, pitch = Cesium.Math.toRadians(-45), roll = 0;
+  if (quat) {
+    var qx=quat.x, qy=quat.y, qz=quat.z, qw=quat.w;
+    // BCF: X=East, Y=North, Z=Up — extract yaw (heading around Z)
+    heading = Math.atan2(2*(qw*qz + qx*qy), 1 - 2*(qy*qy + qz*qz));
+    // Extract pitch (tilt around X), offset by -90deg for Cesium convention
+    var sinP = 2*(qw*qy - qz*qx);
+    sinP = Math.max(-1, Math.min(1, sinP));
+    pitch = Math.asin(sinP) - Math.PI/2;
+    // Clamp pitch to avoid flipping
+    pitch = Math.max(Cesium.Math.toRadians(-90), Math.min(Cesium.Math.toRadians(0), pitch));
+    // Roll
+    roll = Math.atan2(2*(qw*qx + qy*qz), 1 - 2*(qx*qx + qy*qy));
   }
 
-  function loadScript(src, cb) {
-    var s = document.createElement('script');
-    s.src = src;
-    s.onload = cb;
-    s.onerror = function() { console.error('Failed: ' + src); cb(); };
-    document.head.appendChild(s);
-  }
+  // Use setView for instant, no animation — real-time tracking
+  S.viewer.camera.setView({
+    destination: dest,
+    orientation: { heading: heading, pitch: pitch, roll: roll }
+  });
 
-  function startWidget(simMode) {
-    var epsg = document.getElementById('epsg-input').value.trim() || 'EPSG:25832';
-    S.epsg = epsg;
-    document.getElementById('crs-input').value = epsg;
-    document.getElementById('setup-overlay').classList.add('hidden');
-    document.getElementById('loading').classList.add('show');
-
-    // Chain: proj4 → EPSG def → Cesium → init
-    setMsg('Loading coordinate engine…');
-    loadScript('https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js', function() {
-      setMsg('Fetching CRS definition…');
-      loadEPSG(epsg, function(err) {
-        if (err) console.warn(err);
-        setMsg('Loading terrain map…');
-        loadScript('https://cdn.jsdelivr.net/npm/cesium@1.136.0/Build/Cesium/Cesium.js', function() {
-          initCesium(function() {
-            S.ready = true;
-            // Flush queued events
-            S.pending.forEach(function(e) {
-              if (e.type === 'cam') window._onCamera(e.d);
-              else if (e.type === 'pick') window._onPick(e.d);
-            });
-            S.pending = [];
-            if (simMode) runSim();
-          });
-        });
-      });
-    });
-  }
-
-  function runSim() {
-    // UTM 32N sample near Oslo
-    var pts = [
-      [598430,6642760,14],[598460,6642762,14],[598480,6642780,12],
-      [598475,6642810,10],[598450,6642820,10],[598430,6642760,14]
-    ];
-    var i = 0;
-    var iv = setInterval(function() {
-      if (i >= pts.length) { clearInterval(iv); return; }
-      var p = pts[i++], w = toWgs84(p[0],p[1]);
-      if (w) flyTo(w.lon, w.lat, p[2]);
-    }, 1400);
-  }
+  S.lastPos = [lon, lat];
+}
 </script>
 </body>
 </html>
