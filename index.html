@@ -384,6 +384,37 @@ async function initCesium() {
   document.getElementById('loading-screen').style.display = 'none';
 
   // Define camera handlers
+  // Poll camera state to catch heading changes not sent via cameraChanged
+  window._startPolling = function() {
+    if (window._pollInterval) return;
+    window._pollInterval = setInterval(function() {
+      if (!S.api) return;
+      S.api.getCameraState().then(function(cam) {
+        if (!cam) return;
+        // Normalize cam like cameraChanged does
+        if (Array.isArray(cam.position)) {
+          cam.position = { easting: cam.position[0], alt: cam.position[1], northing: cam.position[2] };
+        }
+        if (cam.quaternion && Array.isArray(cam.quaternion)) {
+          cam.orientation = { x: cam.quaternion[0], y: cam.quaternion[1], z: cam.quaternion[2], w: cam.quaternion[3] };
+        }
+        window._onCamera(cam);
+      }).catch(function(){});
+    }, 100);
+  };
+
+  window.setNavMode = function(mode) {
+    if (!S.api) return;
+    S.api.setNavigationMode(mode);
+    document.querySelectorAll('button').forEach(function(b) {
+      b.style.color = '#666'; b.style.borderColor = '#333';
+    });
+    var label = mode === 0 ? 'WALK' : 'ORBIT';
+    document.querySelectorAll('button').forEach(function(b) {
+      if (b.textContent === label) { b.style.color = '#00d4ff'; b.style.borderColor = '#00d4ff'; }
+    });
+  };
+
   window._onCamera = function(cam) {
     var w = toWgs84(cam.position.easting, cam.position.northing);
     if (!w) return;
