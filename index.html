@@ -391,15 +391,21 @@ async function initCesium() {
       if (!S.api) return;
       S.api.getCameraState().then(function(cam) {
         if (!cam) return;
-        // Normalize cam like cameraChanged does
+        // Log first result to see structure
+        if (!window._pollLogged) {
+          window._pollLogged = true;
+          console.log('POLL CAM:', JSON.stringify(cam));
+        }
+        // Normalize position
         if (Array.isArray(cam.position)) {
           cam.position = { easting: cam.position[0], alt: cam.position[1], northing: cam.position[2] };
         }
+        // Normalize quaternion
         if (cam.quaternion && Array.isArray(cam.quaternion)) {
           cam.orientation = { x: cam.quaternion[0], y: cam.quaternion[1], z: cam.quaternion[2], w: cam.quaternion[3] };
         }
         window._onCamera(cam);
-      }).catch(function(){});
+      }).catch(function(e){ console.log('POLL ERR:', e); });
     }, 100);
   };
 
