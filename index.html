@@ -28,17 +28,14 @@
         var el = document.getElementById('conn-status');
         if (el) { el.textContent = '● Connected'; el.style.color = '#00ff9d'; }
         if (!cam) return;
-        // Normalise: position can be array [x,y,z] or object {x,y,z}
-        var pos = cam.position;
-        if (Array.isArray(pos)) {
-          // IFC array: [Easting, Northing, Height]
-          cam.position = { x: pos[0], y: pos[1], z: pos[2] };
-        }
+        // Position array: [Easting, Height, Northing]
+        var pos = Array.isArray(cam.position) ? cam.position : [cam.position.x, cam.position.y, cam.position.z];
+        cam.position = { easting: pos[0], alt: pos[1], northing: pos[2] };
         var quat = cam.quaternion || cam.orientation;
         if (quat && Array.isArray(quat)) {
           cam.orientation = { x: quat[0], y: quat[1], z: quat[2], w: quat[3] };
         }
-        // Show raw CRS coords for debug
+        // Show coords
         var coords = document.getElementById('coords');
         if (coords) coords.style.display = 'block';
         // Show raw array values BEFORE any conversion
