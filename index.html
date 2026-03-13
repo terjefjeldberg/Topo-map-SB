@@ -379,14 +379,14 @@
 
   // NTM/UTM inverse Transverse Mercator — pure JS, no proj4 needed
   var _tmParams = {
-    'EPSG:5941': { lon0: 5.5,  lat0: 58, x0: 100000, y0: 1000000 },
-    'EPSG:5942': { lon0: 6.5,  lat0: 58, x0: 100000, y0: 1000000 },
-    'EPSG:5943': { lon0: 7.5,  lat0: 58, x0: 100000, y0: 1000000 },
-    'EPSG:5944': { lon0: 8.5,  lat0: 58, x0: 100000, y0: 1000000 },
-    'EPSG:5945': { lon0: 9.5,  lat0: 58, x0: 100000, y0: 1000000 },
-    'EPSG:5946': { lon0: 10.5, lat0: 58, x0: 100000, y0: 1000000 },
-    'EPSG:5947': { lon0: 11.5, lat0: 58, x0: 100000, y0: 1000000 },
-    'EPSG:5948': { lon0: 12.5, lat0: 58, x0: 100000, y0: 1000000 },
+    'EPSG:5941': { lon0: 6.5,  lat0: 58, x0: 100000, y0: 1000000 },
+    'EPSG:5942': { lon0: 7.5,  lat0: 58, x0: 100000, y0: 1000000 },
+    'EPSG:5943': { lon0: 8.5,  lat0: 58, x0: 100000, y0: 1000000 },
+    'EPSG:5944': { lon0: 9.5,  lat0: 58, x0: 100000, y0: 1000000 },
+    'EPSG:5945': { lon0: 10.5, lat0: 58, x0: 100000, y0: 1000000 },
+    'EPSG:5946': { lon0: 6.5,  lat0: 58, x0: 100000, y0: 1000000 },
+    'EPSG:5947': { lon0: 7.5,  lat0: 58, x0: 100000, y0: 1000000 },
+    'EPSG:5948': { lon0: 8.5,  lat0: 58, x0: 100000, y0: 1000000 },
     'EPSG:25832': { lon0: 9.0,  lat0: 0,  x0: 500000, y0: 0 },
     'EPSG:25833': { lon0: 15.0, lat0: 0,  x0: 500000, y0: 0 },
     'EPSG:32632': { lon0: 9.0,  lat0: 0,  x0: 500000, y0: 0 },
@@ -432,18 +432,20 @@
   // Convert BCF/IFC quaternion to Cesium heading+pitch+roll
   // BCF uses: X=East, Y=North, Z=Up. Quaternion rotates camera from default (looking North, level)
   function quatToHPR(q) {
-    var x = q.x, y = q.y, z = q.z, w = q.w;
-    // Extract Euler angles from quaternion (ZYX order)
-    // heading = rotation around Z (up), pitch = around X, roll = around Y
-    var sinYcosP = 2*(w*z + x*y);
+    // BCF quaternion convention: X=East, Y=North, Z=Up (right-handed)
+    // Remap to Cesium: heading=yaw around Z, pitch=around Y, roll=around X
+    // Swap axes: Cesium X=East, Y=Up, Z=-North
+    var x = q.x, y = q.z, z = -q.y, w = q.w;
+
+    var sinYcosP = 2*(w*y + x*z);
     var cosYcosP = 1 - 2*(y*y + z*z);
     var heading = Math.atan2(sinYcosP, cosYcosP);
 
     var sinP = 2*(w*x - z*y);
     sinP = Math.max(-1, Math.min(1, sinP));
-    var pitch = Math.asin(sinP);
+    var pitch = Math.asin(sinP) - Math.PI/2;
 
-    var sinRcosP = 2*(w*y + z*x);
+    var sinRcosP = 2*(w*z + y*x);
     var cosRcosP = 1 - 2*(x*x + y*y);
     var roll = Math.atan2(sinRcosP, cosRcosP);
 
