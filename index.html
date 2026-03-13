@@ -369,16 +369,10 @@
 
   function toWgs84(easting, northing) {
     try {
-      // Use proj4 string directly to bypass any bad built-in EPSG definition
-      var projStr = _knownCRS[S.epsg];
+      var projStr = _knownCRS[S.epsg] || proj4.defs(S.epsg);
       var wgs84 = '+proj=longlat +datum=WGS84 +no_defs';
-      var r;
-      if (projStr) {
-        r = proj4(projStr, wgs84, [easting, northing]);
-      } else {
-        r = proj4(S.epsg, 'EPSG:4326', [easting, northing]);
-      }
-      // proj4 always returns [lon, lat] when converting TO +proj=longlat
+      // proj4 TM: input is [easting, northing], output is [lon, lat]
+      var r = proj4(projStr, wgs84, [easting, northing]);
       return { lon: r[0], lat: r[1] };
     } catch(e) { console.error('toWgs84 error:', e); return null; }
   }
