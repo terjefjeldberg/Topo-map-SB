@@ -396,7 +396,13 @@ async function initCesium() {
 
     document.getElementById('v-lat').textContent = 'LAT  ' + w.lat.toFixed(6) + '°';
     document.getElementById('v-lon').textContent = 'LON  ' + w.lon.toFixed(6) + '°';
-    document.getElementById('v-alt').textContent = 'ALT  ' + alt.toFixed(1) + ' m';
+    var qRaw = cam.orientation || cam.quaternion;
+    if (qRaw) {
+      var hdgDeg = (-(Math.atan2(2*(qRaw.x*qRaw.y + qRaw.w*qRaw.z), 1-2*(qRaw.y*qRaw.y+qRaw.z*qRaw.z)) ) + Math.PI/2) * 180/Math.PI;
+      document.getElementById('v-alt').textContent = 'HDG  ' + hdgDeg.toFixed(1) + '°';
+    } else {
+      document.getElementById('v-alt').textContent = 'HDG  no quat';
+    }
   };
 
   window._onPick = function(res) {
