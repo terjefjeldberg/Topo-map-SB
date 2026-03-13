@@ -442,13 +442,17 @@ function flyTo(lon, lat, alt, quat) {
   if (quat) {
     var qx=quat.x, qy=quat.y, qz=quat.z, qw=quat.w;
     // BCF quaternion: X=East, Y=North, Z=Up
-    // Extract heading (yaw around Z)
+    // Log raw quat on first call so we can see default orientation
+    if (!window._quatLogged) {
+      window._quatLogged = true;
+      console.log('BCF quat:', JSON.stringify({x:qx,y:qy,z:qz,w:qw}));
+      var el = document.getElementById('v-alt');
+      if (el) el.textContent = 'Q: ' + qx.toFixed(3)+','+qy.toFixed(3)+','+qz.toFixed(3)+','+qw.toFixed(3);
+    }
     heading = Math.atan2(2*(qw*qz + qx*qy), 1 - 2*(qy*qy + qz*qz));
-    // Extract pitch (tilt around X)
     var sinP = 2*(qw*qx - qy*qz);
     sinP = Math.max(-1, Math.min(1, sinP));
     pitch = Math.asin(sinP) - Math.PI/2;
-    // Force roll = 0 to keep horizon level
     roll = 0;
   }
 
