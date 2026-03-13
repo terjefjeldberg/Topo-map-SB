@@ -470,9 +470,8 @@ function flyTo(lon, lat, alt, quat, posChanged) {
     var fwdZ = 2*(qy*qz - qw*qx);
 
     // In BCF: X=East, Y=North, Z=Up
-    // Cesium heading: 0=North, PI/2=East (clockwise)
-    // atan2(East, North) gives bearing from North clockwise
-    heading = Math.atan2(fwdX, fwdY);
+    // Cesium heading: 0=North, clockwise positive
+    heading = -(Math.atan2(fwdX, fwdY)) + Math.PI/2;
 
     // Pitch: angle above/below horizontal
     pitch = Math.asin(Math.max(-1, Math.min(1, fwdZ)));
