@@ -431,8 +431,7 @@ function flyTo(lon, lat, alt, quat) {
   var viewAlt = -alt + terrainOffset + 200;
   var dest = Cesium.Cartesian3.fromDegrees(lon, lat, Math.max(viewAlt, 50));
 
-  S.marker.position = Cesium.Cartesian3.fromDegrees(lon, lat, Math.max(viewAlt - 10, 5));
-  S.marker.show = true;
+
 
   // Convert BCF quaternion to Cesium HPR
   // BCF: X=East, Y=North, Z=Up (right-handed)
@@ -447,7 +446,7 @@ function flyTo(lon, lat, alt, quat) {
     // Pitch: tilt around Y axis (up/down)
     var sinP = 2*(qw*qx - qy*qz);
     sinP = Math.max(-1, Math.min(1, sinP));
-    pitch = -Math.asin(sinP) - Math.PI/2;
+    pitch = -Math.asin(sinP);
     // Roll
     roll = Math.atan2(2*(qw*qy + qx*qz), 1 - 2*(qx*qx + qy*qy));
   }
