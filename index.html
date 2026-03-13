@@ -438,7 +438,7 @@ function flyTo(lon, lat, alt, quat) {
   // Symptoms: CCW rotation -> globe tilts down = heading and pitch are swapped
   //           camera tilt up -> globe rotates CCW = pitch and heading swapped
   // Fix: swap heading/pitch axes
-  var heading = 0, pitch = Cesium.Math.toRadians(-45), roll = 0;
+  var heading = 0, pitch = Cesium.Math.toRadians(-20), roll = 0;
   if (quat) {
     var qx=quat.x, qy=quat.y, qz=quat.z, qw=quat.w;
     // BCF quaternion: X=East, Y=North, Z=Up
@@ -449,10 +449,16 @@ function flyTo(lon, lat, alt, quat) {
       var el = document.getElementById('v-alt');
       if (el) el.textContent = 'Q: ' + qx.toFixed(3)+','+qy.toFixed(3)+','+qz.toFixed(3)+','+qw.toFixed(3);
     }
+    // Heading: rotation around Z (up) axis
     heading = Math.atan2(2*(qw*qz + qx*qy), 1 - 2*(qy*qy + qz*qz));
-    var sinP = 2*(qw*qx - qy*qz);
-    sinP = Math.max(-1, Math.min(1, sinP));
-    pitch = Math.asin(sinP) - Math.PI/2;
+    // Pitch: BCF default look direction is along +Y (north/forward)
+    // When quat is identity (0,0,0,1), camera looks along +Y = horizontal
+    // Cesium pitch=0 is horizontal, pitch=-PI/2 is straight down
+    // Extract forward vector Y component to get pitch
+    var fwdZ = 2*(qy*qz - qw*qx); // Z component of rotated +Y vector
+    pitch = Math.asin(Math.max(-1, Math.min(1, fwdZ)));
+    // Negate: BCF +Z=up but Cesium pitch increases upward
+    pitch = -pitch;
     roll = 0;
   }
 
