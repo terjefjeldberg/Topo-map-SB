@@ -31,7 +31,7 @@ jobs:
       - name: Prepare site
         run: |
           mkdir site
-          cp index.html styles.css app.js streambim-widget-api.min.js site/
+          cp index.html styles.css state.js streambim.js epsg.js viewer.js measure.js streambim-widget-api.min.js site/
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
