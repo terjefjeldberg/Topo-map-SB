@@ -38,6 +38,8 @@ async function enableBuildings(viewer) {
   }
 }
 
+var TERRAIN_EXAGGERATION_STEPS = [1, 1.5, 2];
+
 function syncLightingButton() {
   var btn = document.getElementById("lighting-btn");
   if (!btn) return;
@@ -45,6 +47,16 @@ function syncLightingButton() {
   btn.setAttribute("aria-pressed", S.nightMode ? "true" : "false");
   btn.textContent = S.nightMode ? "NATT" : "DAG";
   btn.title = S.nightMode ? "Bytt til dagvisning" : "Bytt til nattvisning";
+}
+
+function syncTerrainButton() {
+  var btn = document.getElementById("terrain-btn");
+  var value =
+    typeof S.terrainExaggeration === "number" ? S.terrainExaggeration : 1;
+  if (!btn) return;
+  btn.classList.toggle("active", value > 1);
+  btn.textContent = "TER " + String(value).replace(".0", "") + "X";
+  btn.title = "Bytt terrengforsterkning (" + value + "x)";
 }
 
 function getLightingReferenceLongitude() {
@@ -103,6 +115,32 @@ window.toggleLighting = function () {
   setLightingEnabled(!S.nightMode);
 };
 
+function setTerrainExaggeration(value) {
+  S.terrainExaggeration =
+    typeof value === "number" && !isNaN(value) ? value : 1;
+  syncTerrainButton();
+  if (!S.viewer || !S.viewer.scene) return;
+
+  S.viewer.scene.verticalExaggeration = S.terrainExaggeration;
+  if ("verticalExaggerationRelativeHeight" in S.viewer.scene) {
+    S.viewer.scene.verticalExaggerationRelativeHeight = 0;
+  }
+  if (typeof S.viewer.scene.requestRender === "function") {
+    S.viewer.scene.requestRender();
+  }
+}
+
+window.cycleTerrainExaggeration = function () {
+  var current =
+    typeof S.terrainExaggeration === "number" ? S.terrainExaggeration : 1;
+  var index = TERRAIN_EXAGGERATION_STEPS.findIndex(function (step) {
+    return Math.abs(step - current) < 0.001;
+  });
+  var nextIndex =
+    index >= 0 ? (index + 1) % TERRAIN_EXAGGERATION_STEPS.length : 0;
+  setTerrainExaggeration(TERRAIN_EXAGGERATION_STEPS[nextIndex]);
+};
+
 async function initCesium() {
   _log("Initialising globe…");
   Cesium.Ion.defaultAccessToken =
@@ -127,6 +165,7 @@ async function initCesium() {
 
   S.viewer = viewer;
   setLightingEnabled(!!S.nightMode);
+  setTerrainExaggeration(S.terrainExaggeration || 1);
 
   // Red box marker for camera position
   S.marker = viewer.entities.add({
@@ -299,3 +338,5 @@ function flyTo(lon, lat, alt, quat, computedHeading) {
       hdgEl.textContent = String(Math.round(deg)).padStart(3, "0") + "°";
   }
 }
+
+syncTerrainButton();
