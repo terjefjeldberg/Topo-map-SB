@@ -337,6 +337,10 @@ window._sbState = {
   viewer: null, marker: null, lastPos: null
 };
 var S = window._sbState;
+var _epsgSetupCode = "5946";
+var _epsgSetupName = "NTM sone 6";
+var _epsgSearchTimer = null;
+
 
 // ── TM parameters for Norwegian NTM and UTM zones ──
 var _tmParams = {
