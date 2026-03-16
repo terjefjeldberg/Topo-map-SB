@@ -3,7 +3,7 @@ window.toggleArea = function() { if (typeof _toggleArea==='function') _toggleAre
 
 // ── MEASURE TOOL ──────────────────────────────────────────────────────────
 var MEASURE_COLOR = '#FFFFFF';
-var AREA_COLOR = '#00d4ff';
+var AREA_COLOR = '#FFFFFF';
 var _measureActive = false;
 var _measurePoints = [];
 var _measureEntities = [];
@@ -365,7 +365,7 @@ function initAreaHandler() {
       point: {
         pixelSize: 7,
         color: Cesium.Color.fromCssColorString(AREA_COLOR),
-        outlineColor: Cesium.Color.WHITE,
+        outlineColor: Cesium.Color.BLACK,
         outlineWidth: 1
       }
     }));
