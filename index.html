@@ -83,6 +83,19 @@
     left: 12px;
     z-index: 20;
   }
+  #area-btn {
+    background: rgba(0,0,0,0.7);
+    border: 1px solid #333;
+    color: #ccc;
+    width: 36px; height: 36px;
+    cursor: pointer;
+    font-size: 16px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 4px;
+    transition: border-color 0.2s;
+    margin-top: 6px;
+  }
+  #area-btn.active { border-color: #00d4ff; color: #00d4ff; }
   #measure-btn {
     background: rgba(0,0,0,0.7);
     border: 1px solid #333;
@@ -123,6 +136,103 @@
     margin-bottom: 6px;
   }
   #profile-canvas { display: block; background: rgba(0,20,30,0.8); }
+
+  /* CRS search */
+  #crs-search-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  #crs-search {
+    background: #111;
+    border: 1px solid #333;
+    color: #ccc;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 3px 8px;
+    width: 200px;
+    outline: none;
+    letter-spacing: 0.5px;
+  }
+  #crs-search:focus { border-color: #00d4ff; }
+  #epsg-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 320px;
+    background: #0d1821;
+    border: 1px solid #00d4ff44;
+    z-index: 1000;
+    max-height: 260px;
+    overflow-y: auto;
+    display: none;
+    margin-top: 2px;
+  }
+  #epsg-dropdown.open { display: block; }
+  .epsg-item {
+    padding: 6px 10px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: #ccc;
+    cursor: pointer;
+    border-bottom: 1px solid #1a2a35;
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+  }
+  .epsg-item:hover { background: #0a2030; color: #00d4ff; }
+  .epsg-code { color: #00d4ff; min-width: 54px; }
+  .epsg-name { color: #aaa; font-size: 10px; }
+  .epsg-loading { padding: 8px 10px; color: #555; font-family: 'DM Mono',monospace; font-size:11px; }
+  #crs-current {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: #00d4ff;
+    padding: 3px 8px;
+    border: 1px solid #00d4ff44;
+    white-space: nowrap;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Setup search */
+  #epsg-search-setup {
+    background: #111;
+    border: 1px solid #333;
+    color: #ccc;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    padding: 6px 10px;
+    width: 100%;
+    outline: none;
+    box-sizing: border-box;
+    margin-bottom: 6px;
+  }
+  #epsg-search-setup:focus { border-color: #00d4ff; }
+  .epsg-setup-list {
+    max-height: 140px;
+    overflow-y: auto;
+    margin-bottom: 6px;
+  }
+  .epsg-setup-item {
+    padding: 5px 8px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: #ccc;
+    cursor: pointer;
+    border-bottom: 1px solid #1a2a35;
+    display: flex; gap: 8px;
+  }
+  .epsg-setup-item:hover { background: #0a2030; color: #00d4ff; }
+  .epsg-selected-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: #00d4ff;
+    min-height: 16px;
+    margin-bottom: 4px;
+    text-align: center;
+  }
 
   #coords {
     position: absolute; bottom: 28px; left: 12px; z-index: 10;
@@ -349,18 +459,11 @@ window.StreamBIM.connect({
 <div id="topbar">
   <span id="topbar-title">TOPO MAP</span>
   <span id="conn-status">● Connecting…</span>
-  <span class="crs-label">EPSG:</span>
-  <input id="crs-input" type="number" placeholder="5946" value="5946"/>
-  <select id="crs-select" onchange="if(this.value){document.getElementById('crs-input').value=this.value;this.value=''}">
-    <option value="">presets…</option>
-    <option value="5946">5946 – NTM 6</option>
-    <option value="5945">5945 – NTM 5</option>
-    <option value="5947">5947 – NTM 7</option>
-    <option value="5545">5545</option>
-    <option value="25832">25832 – UTM 32N</option>
-    <option value="25833">25833 – UTM 33N</option>
-  </select>
-  <button id="crs-apply" onclick="changeCRS()">Apply</button>
+  <div id="crs-search-wrap">
+    <input id="crs-search" type="text" placeholder="Søk EPSG… (navn eller kode)" autocomplete="off" oninput="searchEpsg(this.value)" onfocus="showEpsgDropdown()" onblur="setTimeout(hideEpsgDropdown,200)"/>
+    <div id="epsg-dropdown"></div>
+  </div>
+  <div id="crs-current" title="Aktivt koordinatsystem">EPSG:5946</div>
 </div>
 
 <!-- Coords overlay -->
@@ -390,6 +493,7 @@ window.StreamBIM.connect({
 <!-- Measure tool -->
 <div id="measure-panel">
   <button id="measure-btn" onclick="toggleMeasure()" title="Avstandsmåling">📏</button>
+  <button id="area-btn" onclick="toggleArea()" title="Arealberegning">⬡</button>
   <div id="measure-result"></div>
 </div>
 
@@ -406,16 +510,17 @@ window.StreamBIM.connect({
     <h2>TOPO MAP</h2>
     <p>Select your project CRS from the presets or enter the EPSG code manually.</p>
     <div class="epsg-row">
-      <span>EPSG:</span>
-      <input id="epsg-input" type="number" value="5946" placeholder="5946"/>
+      <input id="epsg-search-setup" type="text" placeholder="Søk koordinatsystem…" autocomplete="off" oninput="searchEpsgSetup(this.value)"/>
     </div>
+    <div id="epsg-setup-results" class="epsg-setup-list"></div>
+    <div id="epsg-setup-selected" class="epsg-selected-label"></div>
     <div class="presets">
-      <div class="p-btn" onclick="sp('5946')">NTM 6 — 5946</div>
-      <div class="p-btn" onclick="sp('5945')">NTM 5 — 5945</div>
-      <div class="p-btn" onclick="sp('5947')">NTM 7 — 5947</div>
-      <div class="p-btn" onclick="sp('5545')">5545</div>
-      <div class="p-btn" onclick="sp('25832')">UTM 32N</div>
-      <div class="p-btn" onclick="sp('25833')">UTM 33N</div>
+      <div class="p-btn" onclick="selectEpsgSetup('5946','NTM sone 6')">NTM 6</div>
+      <div class="p-btn" onclick="selectEpsgSetup('5945','NTM sone 5')">NTM 5</div>
+      <div class="p-btn" onclick="selectEpsgSetup('5947','NTM sone 7')">NTM 7</div>
+      <div class="p-btn" onclick="selectEpsgSetup('5948','NTM sone 8')">NTM 8</div>
+      <div class="p-btn" onclick="selectEpsgSetup('25832','UTM zone 32N')">UTM 32N</div>
+      <div class="p-btn" onclick="selectEpsgSetup('25833','UTM zone 33N')">UTM 33N</div>
     </div>
     <button class="go-btn" onclick="startWidget()">OPEN MAP</button>
   </div>
@@ -430,8 +535,84 @@ window.StreamBIM.connect({
 </div>
 
 <script>
+// ── EPSG SEARCH ───────────────────────────────────────────────────────────
+var _epsgSearchTimer = null;
+var _epsgSetupCode = '5946';
+var _epsgSetupName = 'NTM sone 6';
+
+function searchEpsg(val) {
+  clearTimeout(_epsgSearchTimer);
+  var dd = document.getElementById('epsg-dropdown');
+  if (!val || val.length < 2) { dd.innerHTML = ''; dd.classList.remove('open'); return; }
+  dd.innerHTML = '<div class="epsg-loading">Søker…</div>';
+  dd.classList.add('open');
+  _epsgSearchTimer = setTimeout(function() { doEpsgSearch(val, dd, false); }, 300);
+}
+
+function searchEpsgSetup(val) {
+  clearTimeout(_epsgSearchTimer);
+  var dd = document.getElementById('epsg-setup-results');
+  if (!val || val.length < 2) { dd.innerHTML = ''; return; }
+  dd.innerHTML = '<div class="epsg-loading">Søker…</div>';
+  _epsgSearchTimer = setTimeout(function() { doEpsgSearch(val, dd, true); }, 300);
+}
+
+function doEpsgSearch(val, dd, isSetup) {
+  var url = 'https://epsg.io/?q=' + encodeURIComponent(val) + '&format=json&limit=20';
+  fetch(url)
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      var results = (data.results || []).filter(function(r) {
+        return r.code && r.name && (r.kind === 'CRS-PROJCRS' || r.kind === 'CRS-GEOGCRS' || r.kind === 'CRS-GEOG2DCRS');
+      });
+      if (results.length === 0) {
+        dd.innerHTML = '<div class="epsg-loading">Ingen treff</div>';
+        return;
+      }
+      dd.innerHTML = results.map(function(r) {
+        var cls = isSetup ? 'epsg-setup-item' : 'epsg-item';
+        var fn = isSetup
+          ? 'selectEpsgSetup('' + r.code + '','' + r.name.replace(/'/g,"\'") + '')'
+          : 'selectEpsgTopbar('' + r.code + '','' + r.name.replace(/'/g,"\'") + '')';
+        return '<div class="' + cls + '" onclick="' + fn + '">' +
+          '<span class="epsg-code">' + r.code + '</span>' +
+          '<span class="epsg-name">' + r.name + '</span></div>';
+      }).join('');
+      if (!isSetup) dd.classList.add('open');
+    })
+    .catch(function() {
+      dd.innerHTML = '<div class="epsg-loading">Feil — sjekk nett</div>';
+    });
+}
+
+function selectEpsgSetup(code, name) {
+  _epsgSetupCode = code;
+  _epsgSetupName = name;
+  document.getElementById('epsg-setup-results').innerHTML = '';
+  document.getElementById('epsg-search-setup').value = '';
+  document.getElementById('epsg-setup-selected').textContent = '✓ ' + code + ' — ' + name;
+}
+
+function selectEpsgTopbar(code, name) {
+  S.epsg = 'EPSG:' + code;
+  document.getElementById('crs-search').value = '';
+  document.getElementById('crs-current').textContent = 'EPSG:' + code;
+  document.getElementById('crs-current').title = name;
+  hideEpsgDropdown();
+  // Re-convert current position with new CRS
+  if (S.lastCamPos) window._onCamera(S.lastCamPos);
+}
+
+function showEpsgDropdown() {
+  var dd = document.getElementById('epsg-dropdown');
+  if (dd.innerHTML && dd.innerHTML.length > 10) dd.classList.add('open');
+}
+function hideEpsgDropdown() {
+  document.getElementById('epsg-dropdown').classList.remove('open');
+}
+
 function sp(code) {
-  document.getElementById('epsg-input').value = code;
+  selectEpsgSetup(code, 'EPSG:'+code);
 }
 
 function _log(msg, cls) {
@@ -444,20 +625,12 @@ function _log(msg, cls) {
   el.scrollTop = el.scrollHeight;
 }
 
-function changeCRS() {
-  var raw = document.getElementById('crs-input').value.trim();
-  if (raw) {
-    S.epsg = 'EPSG:' + raw.replace(/epsg:/i,'').trim();
-    document.getElementById('crs-input').value = raw.replace(/epsg:/i,'').trim();
-  }
-}
-
 function startWidget() {
-  var raw = document.getElementById('epsg-input').value.trim() || '5946';
-  S.epsg = 'EPSG:' + raw.replace(/epsg:/i,'').trim();
+  S.epsg = 'EPSG:' + _epsgSetupCode;
+  document.getElementById('crs-current').textContent = 'EPSG:' + _epsgSetupCode;
+  document.getElementById('crs-current').title = _epsgSetupName;
   document.getElementById('setup-overlay').style.display = 'none';
   document.getElementById('loading-screen').style.display = 'flex';
-  document.getElementById('crs-input').value = raw.replace(/epsg:/i,'').trim();
   loadScripts();
 }
 
@@ -504,7 +677,7 @@ async function initCesium() {
   _log('Globe ready', 'ok');
   document.getElementById('loading-screen').style.display = 'none';
   // Init measure click handler
-  setTimeout(function() { if (!_measureInited) { _measureInited=true; initMeasureHandler(); } }, 500);
+  setTimeout(function() { if (!_measureInited) { _measureInited=true; initMeasureHandler(); initAreaHandler(); } }, 500);
 
   // Define camera handlers
   // _startPolling defined globally above
@@ -540,6 +713,7 @@ async function initCesium() {
         computedHeading = Math.atan2(dE, dN) + Math.PI;
       }
     }
+    S.lastCamPos = cam;
     flyTo(w.lon, w.lat, alt, quat, computedHeading);
     S.lastPos = [w.lon, w.lat, cam.position.easting, cam.position.northing];
 
@@ -816,6 +990,161 @@ function drawProfile(p1, p2) {
     ctx.fillText('0', 2, H-2);
     ctx.fillText(distTxt, W-30, H-2);
   });
+}
+
+// ── AREA TOOL ──────────────────────────────────────────────────────────────
+var _areaActive = false;
+var _areaPoints = [];
+var _areaEntities = [];
+
+function toggleArea() {
+  _areaActive = !_areaActive;
+  var btn = document.getElementById('area-btn');
+  btn.classList.toggle('active', _areaActive);
+
+  // Turn off measure if active
+  if (_areaActive && _measureActive) toggleMeasure();
+
+  if (!_areaActive) {
+    clearArea();
+    document.getElementById('measure-result').textContent = '';
+  } else {
+    document.getElementById('measure-result').textContent = 'Klikk punkter — dobbeltklikk for å avslutte';
+  }
+}
+
+function clearArea() {
+  _areaPoints = [];
+  _areaEntities.forEach(function(e) { S.viewer.entities.remove(e); });
+  _areaEntities = [];
+}
+
+// Shoelace formula on flat lat/lon → convert to m²
+function calcAreaM2(pts) {
+  if (pts.length < 3) return 0;
+  // Project to approximate metres using midpoint lat
+  var midLat = pts.reduce(function(s,p){return s+p.lat;},0)/pts.length;
+  var metersPerDegLat = 111320;
+  var metersPerDegLon = 111320 * Math.cos(midLat * Math.PI/180);
+  var area = 0;
+  var n = pts.length;
+  for (var i = 0; i < n; i++) {
+    var j = (i+1) % n;
+    var xi = pts[i].lon * metersPerDegLon;
+    var yi = pts[i].lat * metersPerDegLat;
+    var xj = pts[j].lon * metersPerDegLon;
+    var yj = pts[j].lat * metersPerDegLat;
+    area += xi * yj - xj * yi;
+  }
+  return Math.abs(area) / 2;
+}
+
+function formatArea(m2) {
+  if (m2 >= 1e6) return (m2/1e6).toFixed(3) + ' km²';
+  if (m2 >= 10000) return (m2/10000).toFixed(2) + ' daa (dekar)';
+  return Math.round(m2) + ' m²';
+}
+
+function redrawAreaPolygon() {
+  // Remove old polygon/line entities (keep dots = first _areaPoints.length entities)
+  while (_areaEntities.length > _areaPoints.length) {
+    S.viewer.entities.remove(_areaEntities.pop());
+  }
+  if (_areaPoints.length < 2) return;
+
+  var positions = _areaPoints.map(function(p) {
+    return Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt + 2);
+  });
+
+  if (_areaPoints.length >= 3) {
+    // Filled polygon
+    var polyPositions = _areaPoints.map(function(p) {
+      return Cesium.Cartesian3.fromDegrees(p.lon, p.lat, p.alt + 1);
+    });
+    _areaEntities.push(S.viewer.entities.add({
+      polygon: {
+        hierarchy: new Cesium.PolygonHierarchy(polyPositions),
+        material: Cesium.Color.fromCssColorString('#00d4ff').withAlpha(0.18),
+        outline: false,
+        perPositionHeight: true
+      }
+    }));
+  }
+
+  // Outline
+  var linePos = positions.concat([positions[0]]);
+  _areaEntities.push(S.viewer.entities.add({
+    polyline: {
+      positions: linePos,
+      width: 2,
+      material: new Cesium.ColorMaterialProperty(
+        Cesium.Color.fromCssColorString('#00d4ff').withAlpha(0.85)
+      ),
+      clampToGround: false
+    }
+  }));
+
+  if (_areaPoints.length >= 3) {
+    var area = calcAreaM2(_areaPoints);
+    document.getElementById('measure-result').textContent =
+      '⬡ ' + formatArea(area) + '  (' + _areaPoints.length + ' pts)';
+  }
+}
+
+function initAreaHandler() {
+  var handler = new Cesium.ScreenSpaceEventHandler(S.viewer.scene.canvas);
+
+  handler.setInputAction(function(click) {
+    if (!_areaActive) return;
+    var ray = S.viewer.camera.getPickRay(click.position);
+    var pos = S.viewer.scene.globe.pick(ray, S.viewer.scene);
+    if (!pos) return;
+    var carto = Cesium.Cartographic.fromCartesian(pos);
+    var lat = Cesium.Math.toDegrees(carto.latitude);
+    var lon = Cesium.Math.toDegrees(carto.longitude);
+    var alt = carto.height;
+
+    _areaPoints.push({lat:lat, lon:lon, alt:alt});
+
+    // Dot
+    _areaEntities.push(S.viewer.entities.add({
+      position: Cesium.Cartesian3.fromDegrees(lon, lat, alt + 2),
+      point: {
+        pixelSize: 7,
+        color: Cesium.Color.fromCssColorString('#00d4ff'),
+        outlineColor: Cesium.Color.WHITE,
+        outlineWidth: 1
+      }
+    }));
+
+    redrawAreaPolygon();
+
+    if (_areaPoints.length === 1) {
+      document.getElementById('measure-result').textContent = 'Klikk neste punkt — dobbeltklikk for å avslutte';
+    }
+  }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+  handler.setInputAction(function(click) {
+    if (!_areaActive) return;
+    // Finalise on double-click
+    if (_areaPoints.length >= 3) {
+      var area = calcAreaM2(_areaPoints);
+      var perimeter = 0;
+      for (var i = 0; i < _areaPoints.length; i++) {
+        var j = (i+1) % _areaPoints.length;
+        perimeter += haversineM(_areaPoints[i].lat, _areaPoints[i].lon,
+                                _areaPoints[j].lat, _areaPoints[j].lon);
+      }
+      var perimTxt = perimeter >= 1000
+        ? (perimeter/1000).toFixed(2) + ' km'
+        : Math.round(perimeter) + ' m';
+      document.getElementById('measure-result').textContent =
+        '⬡ ' + formatArea(area) + '   omk: ' + perimTxt;
+    }
+    _areaActive = false;
+    document.getElementById('area-btn').classList.remove('active');
+    _areaPoints = [];
+  }, Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
 }
 
 // Init measure handler when globe is ready
