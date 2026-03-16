@@ -447,6 +447,16 @@ window.StreamBIM.connect({
   var el = document.getElementById('conn-status');
   if (el) { el.textContent = '● Disconnected'; el.style.color = '#f04040'; }
 });
+
+// Must be in first script block so onclick works before second script loads
+window.startWidget = function() {
+  S.epsg = 'EPSG:' + _epsgSetupCode;
+  document.getElementById('crs-current').textContent = 'EPSG:' + _epsgSetupCode;
+  document.getElementById('crs-current').title = _epsgSetupName;
+  document.getElementById('setup-overlay').style.display = 'none';
+  document.getElementById('loading-screen').style.display = 'flex';
+  loadScripts();
+};
 </script>
 
 <!-- Cesium CSS -->
@@ -543,7 +553,7 @@ var _epsgSetupName = 'NTM sone 6';
 function searchEpsg(val) {
   clearTimeout(_epsgSearchTimer);
   var dd = document.getElementById('epsg-dropdown');
-  if (!val || val.length < 2) { dd.innerHTML = ''; dd.classList.remove('open'); return; }
+  if (!val || val.length < 1) { dd.innerHTML = ''; dd.classList.remove('open'); return; }
   dd.innerHTML = '<div class="epsg-loading">Søker…</div>';
   dd.classList.add('open');
   _epsgSearchTimer = setTimeout(function() { doEpsgSearch(val, dd, false); }, 300);
@@ -552,21 +562,21 @@ function searchEpsg(val) {
 function searchEpsgSetup(val) {
   clearTimeout(_epsgSearchTimer);
   var dd = document.getElementById('epsg-setup-results');
-  if (!val || val.length < 2) { dd.innerHTML = ''; return; }
+  if (!val || val.length < 1) { dd.innerHTML = ''; return; }
   dd.innerHTML = '<div class="epsg-loading">Søker…</div>';
   _epsgSearchTimer = setTimeout(function() { doEpsgSearch(val, dd, true); }, 300);
 }
 
 function doEpsgSearch(val, dd, isSetup) {
-  var url = 'https://epsg.io/?q=' + encodeURIComponent(val) + '&format=json&limit=20';
+  var url = 'https://epsg.io/?q=' + encodeURIComponent(val) + '&format=json&limit=40';
   fetch(url)
     .then(function(r){ return r.json(); })
     .then(function(data) {
       var results = (data.results || []).filter(function(r) {
-        return r.code && r.name && (r.kind === 'CRS-PROJCRS' || r.kind === 'CRS-GEOGCRS' || r.kind === 'CRS-GEOG2DCRS');
+        return r.code && r.name;
       });
       if (results.length === 0) {
-        dd.innerHTML = '<div class="epsg-loading">Ingen treff</div>';
+        dd.innerHTML = '<div class="epsg-loading">Ingen treff for "' + val + '"</div>';
         return;
       }
       dd.innerHTML = results.map(function(r) {
@@ -574,9 +584,16 @@ function doEpsgSearch(val, dd, isSetup) {
         var fn = isSetup
           ? 'selectEpsgSetup('' + r.code + '','' + r.name.replace(/'/g,"\'") + '')'
           : 'selectEpsgTopbar('' + r.code + '','' + r.name.replace(/'/g,"\'") + '')';
+        // Show kind as a small badge
+        var kindLabel = '';
+        if (r.kind) {
+          var k = r.kind.replace('CRS-','').replace('PROJCRS','Proj').replace('GEOGCRS','Geog').replace('GEOG2DCRS','Geog').replace('VERTCRS','Vert').replace('COMPOUNDCRS','Compound');
+          kindLabel = '<span style="color:#555;font-size:9px;margin-left:auto">' + k + '</span>';
+        }
         return '<div class="' + cls + '" onclick="' + fn + '">' +
           '<span class="epsg-code">' + r.code + '</span>' +
-          '<span class="epsg-name">' + r.name + '</span></div>';
+          '<span class="epsg-name">' + r.name + '</span>' +
+          kindLabel + '</div>';
       }).join('');
       if (!isSetup) dd.classList.add('open');
     })
@@ -625,14 +642,7 @@ function _log(msg, cls) {
   el.scrollTop = el.scrollHeight;
 }
 
-function startWidget() {
-  S.epsg = 'EPSG:' + _epsgSetupCode;
-  document.getElementById('crs-current').textContent = 'EPSG:' + _epsgSetupCode;
-  document.getElementById('crs-current').title = _epsgSetupName;
-  document.getElementById('setup-overlay').style.display = 'none';
-  document.getElementById('loading-screen').style.display = 'flex';
-  loadScripts();
-}
+// startWidget defined in first script block
 
 function loadScripts() {
   _log('Loading Cesium…');
