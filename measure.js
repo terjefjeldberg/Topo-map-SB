@@ -39,14 +39,14 @@ function haversineM(lat1, lon1, lat2, lon2) {
 function createReadableLabel(text, fillColor) {
   return {
     text: text,
-    font: '13px DM Mono, monospace',
+    font: '14px DM Mono, monospace',
     fillColor: Cesium.Color.fromCssColorString(fillColor || '#FFFFFF'),
     outlineColor: Cesium.Color.BLACK,
-    outlineWidth: 3,
+    outlineWidth: 4,
     style: Cesium.LabelStyle.FILL_AND_OUTLINE,
     showBackground: true,
-    backgroundColor: Cesium.Color.fromCssColorString('#101010').withAlpha(0.78),
-    backgroundPadding: new Cesium.Cartesian2(10, 6),
+    backgroundColor: Cesium.Color.fromCssColorString('#050505').withAlpha(0.9),
+    backgroundPadding: new Cesium.Cartesian2(12, 8),
     disableDepthTestDistance: Number.POSITIVE_INFINITY
   };
 }
@@ -99,6 +99,10 @@ function addAreaSummaryLabel(pts, area, perimeter) {
   _areaEntities.push(S.viewer.entities.add({
     position: Cesium.Cartesian3.fromDegrees(center.lon, center.lat, center.alt + 4),
     label: Object.assign(createReadableLabel('Areal ' + formatArea(area) + '\nOmk ' + Math.round(perimeter) + ' m', '#FFFFFF'), {
+      font: '15px DM Mono, monospace',
+      outlineWidth: 5,
+      backgroundColor: Cesium.Color.fromCssColorString('#000000').withAlpha(0.94),
+      backgroundPadding: new Cesium.Cartesian2(14, 10),
       horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
       verticalOrigin: Cesium.VerticalOrigin.CENTER,
       pixelOffset: new Cesium.Cartesian2(0, 0)
@@ -331,7 +335,7 @@ function redrawAreaPolygon() {
       positions: linePos,
       width: 2,
       material: new Cesium.ColorMaterialProperty(
-        Cesium.Color.fromCssColorString('#00d4ff').withAlpha(0.85)
+        Cesium.Color.fromCssColorString(AREA_COLOR).withAlpha(0.85)
       ),
       clampToGround: false
     }
