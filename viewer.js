@@ -40,6 +40,24 @@ async function enableBuildings(viewer) {
 
 var BUILDING_HOVER_COLOR = "#F2921C";
 var BUILDING_SELECTED_COLOR = "#FFF4D6";
+var BUILDING_INFO_FIELDS = [
+  { keys: ["name", "name:en"], label: "Navn" },
+  { keys: ["building"], label: "Type" },
+  { keys: ["shop", "amenity", "office"], label: "Bruk" },
+  { keys: ["cesium#estimatedHeight", "height"], label: "Hoyde" },
+  { keys: ["building:levels"], label: "Etasjer" },
+  { keys: ["addr:street"], label: "Gate" },
+  { keys: ["addr:housenumber"], label: "Nummer" },
+  { keys: ["addr:postcode"], label: "Postnr" },
+  { keys: ["addr:city"], label: "By" },
+  { keys: ["opening_hours"], label: "Aapningstider" },
+  { keys: ["operator"], label: "Operator" },
+  { keys: ["access"], label: "Adgang" },
+  { keys: ["wheelchair"], label: "Tilgjengelighet" },
+  { keys: ["source"], label: "Kilde" },
+  { keys: ["elementType"], label: "OSM-type" },
+  { keys: ["elementId"], label: "OSM-ID" },
+];
 
 function requestSceneRender() {
   if (
@@ -49,6 +67,139 @@ function requestSceneRender() {
   ) {
     S.viewer.scene.requestRender();
   }
+}
+
+function getBuildingInfoElements() {
+  return {
+    panel: document.getElementById("building-info"),
+    title: document.getElementById("building-info-title"),
+    body: document.getElementById("building-info-body"),
+  };
+}
+
+function normalizeBuildingValue(value) {
+  if (value == null) return null;
+  if (Array.isArray(value)) value = value.join(", ");
+  if (typeof value === "object") {
+    try {
+      value = JSON.stringify(value);
+    } catch (_err) {
+      return null;
+    }
+  }
+  value = String(value).trim();
+  return value ? value : null;
+}
+
+function getBuildingProperty(feature, keys) {
+  if (!feature || typeof feature.getProperty !== "function") return null;
+  for (var i = 0; i < keys.length; i++) {
+    var key = keys[i];
+    var value = normalizeBuildingValue(feature.getProperty(key));
+    if (value) return { key: key, value: value };
+  }
+  return null;
+}
+
+function formatBuildingInfoValue(key, value) {
+  if (key === "cesium#estimatedHeight" || key === "height") {
+    var num = Number(value);
+    if (!isNaN(num))
+      return (num >= 100 ? Math.round(num) : num.toFixed(1)) + " m";
+  }
+  if (key === "wheelchair") {
+    if (value === "yes") return "Ja";
+    if (value === "no") return "Nei";
+    if (value === "limited") return "Begrenset";
+  }
+  return value;
+}
+
+function createBuildingInfoRow(label, value) {
+  var row = document.createElement("div");
+  row.className = "building-info-row";
+
+  var labelEl = document.createElement("div");
+  labelEl.className = "building-info-label";
+  labelEl.textContent = label;
+
+  var valueEl = document.createElement("div");
+  valueEl.className = "building-info-value";
+  valueEl.textContent = value;
+
+  row.appendChild(labelEl);
+  row.appendChild(valueEl);
+  return row;
+}
+
+function hideBuildingInfo() {
+  var els = getBuildingInfoElements();
+  if (!els.panel || !els.body || !els.title) return;
+  els.panel.hidden = true;
+  els.title.textContent = "BYGGINFO";
+  els.body.innerHTML = "";
+}
+
+function showBuildingInfo(feature) {
+  var els = getBuildingInfoElements();
+  if (!els.panel || !els.body || !els.title) return;
+
+  els.body.innerHTML = "";
+  if (!feature) {
+    hideBuildingInfo();
+    return;
+  }
+
+  var titleProp = getBuildingProperty(feature, ["name", "name:en"]);
+  var typeProp = getBuildingProperty(feature, ["building", "shop", "amenity"]);
+  els.title.textContent = titleProp
+    ? titleProp.value
+    : typeProp
+      ? "Bygg - " + typeProp.value
+      : "BYGGINFO";
+
+  var usedKeys = {};
+  var rowCount = 0;
+
+  BUILDING_INFO_FIELDS.forEach(function (field) {
+    var prop = getBuildingProperty(feature, field.keys);
+    if (!prop || usedKeys[prop.key]) return;
+    usedKeys[prop.key] = true;
+    els.body.appendChild(
+      createBuildingInfoRow(
+        field.label,
+        formatBuildingInfoValue(prop.key, prop.value),
+      ),
+    );
+    rowCount += 1;
+  });
+
+  if (!rowCount && typeof feature.getPropertyIds === "function") {
+    var propertyIds = feature.getPropertyIds([]);
+    propertyIds.slice(0, 8).forEach(function (propertyId) {
+      if (usedKeys[propertyId]) return;
+      var rawValue = normalizeBuildingValue(feature.getProperty(propertyId));
+      if (!rawValue) return;
+      usedKeys[propertyId] = true;
+      els.body.appendChild(
+        createBuildingInfoRow(
+          propertyId,
+          formatBuildingInfoValue(propertyId, rawValue),
+        ),
+      );
+      rowCount += 1;
+    });
+  }
+
+  if (!rowCount) {
+    var empty = document.createElement("div");
+    empty.className = "building-info-empty";
+    empty.textContent =
+      "Ingen tilgjengelig metadata for dette bygget fra Cesium OSM Buildings.";
+    els.body.appendChild(empty);
+  }
+
+  els.panel.hidden = false;
 }
 
 function setBuildingFeatureColor(feature, colorCss, alpha) {
@@ -106,6 +257,7 @@ function clearSelectedBuilding() {
     resetBuildingFeatureColor(S.selectedBuildingFeature);
   }
   S.selectedBuildingFeature = null;
+  hideBuildingInfo();
 }
 
 function setHoveredBuilding(feature) {
@@ -127,9 +279,17 @@ function setSelectedBuilding(feature) {
   S.selectedBuildingFeature = feature || null;
   if (feature) {
     setBuildingFeatureColor(feature, BUILDING_SELECTED_COLOR, 0.98);
+    showBuildingInfo(feature);
+  } else {
+    hideBuildingInfo();
   }
   requestSceneRender();
 }
+
+window.clearBuildingSelection = function () {
+  clearSelectedBuilding();
+  requestSceneRender();
+};
 
 function initBuildingInteraction(viewer) {
   if (!viewer || typeof Cesium === "undefined") return;

@@ -7,13 +7,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;700&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cesium@1.136.0/Build/Cesium/Widgets/widgets.css"/>
-<link rel="stylesheet" href="./styles.css?v=20260316-4"/>
+<link rel="stylesheet" href="./styles.css?v=20260316-5"/>
 </head>
 <body>
 
 <!-- StreamBIM API — must be first, before anything else -->
-<script src="./streambim-widget-api.min.js?v=20260316-4"></script>
-<script src="./proj4.js?v=20260316-4"></script>
+<script src="./streambim-widget-api.min.js?v=20260316-5"></script>
+<script src="./proj4.js?v=20260316-5"></script>
 
 
 <!-- Fullscreen Cesium viewport -->
@@ -70,6 +70,15 @@
   <button onclick="document.getElementById('profile-panel').style.display='none'" style="background:none;border:none;color:#888;cursor:pointer;font-size:11px;margin-top:4px;">✕ lukk</button>
 </div>
 
+<!-- Building info -->
+<div id="building-info" hidden>
+  <div class="building-info-head">
+    <div id="building-info-title">BYGGINFO</div>
+    <button id="building-info-close" type="button" onclick="clearBuildingSelection()" title="Lukk bygginfo">&#10005;</button>
+  </div>
+  <div id="building-info-body"></div>
+</div>
+
 <!-- Setup overlay -->
 <div id="setup-overlay">
   <div class="setup-card">
@@ -102,10 +111,10 @@
   </div>
 </div>
 
-<script src="./state.js?v=20260316-4"></script>
-<script src="./streambim.js?v=20260316-4"></script>
-<script src="./epsg.js?v=20260316-4"></script>
-<script src="./viewer.js?v=20260316-4"></script>
-<script src="./measure.js?v=20260316-4"></script>
+<script src="./state.js?v=20260316-5"></script>
+<script src="./streambim.js?v=20260316-5"></script>
+<script src="./epsg.js?v=20260316-5"></script>
+<script src="./viewer.js?v=20260316-5"></script>
+<script src="./measure.js?v=20260316-5"></script>
 </body>
 </html>
