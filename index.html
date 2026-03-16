@@ -501,24 +501,30 @@ function flyTo(lon, lat, alt, quat, computedHeading) {
       var el = document.getElementById('v-alt');
       if (el) el.textContent = 'Q: ' + qx.toFixed(3)+','+qy.toFixed(3)+','+qz.toFixed(3)+','+qw.toFixed(3);
     }
-    // Normalise quaternion
+    // Same method as byggstyrning: Euler YXZ from quaternion
     var len = Math.sqrt(qx*qx + qy*qy + qz*qz + qw*qw);
     qx/=len; qy/=len; qz/=len; qw/=len;
 
-    // Rotate the default forward vector (0,1,0) = +Y by quaternion
-    // v' = q * v * q^-1
-    // For v=(0,1,0):
-    var fwdX = 2*(qx*qy + qw*qz);
-    var fwdY = 1 - 2*(qx*qx + qz*qz);
-    var fwdZ = 2*(qy*qz - qw*qx);
+    // Three.js setFromQuaternion(q, 'YXZ') equivalent
+    var m13 = 2*(qx*qz + qw*qy);
+    var m23 = 2*(qy*qz - qw*qx);
+    var m33 = 1 - 2*(qx*qx + qy*qy);
+    var m11 = 1 - 2*(qy*qy + qz*qz);
+    var m21 = 2*(qx*qy + qw*qz);
+    var m22 = 1 - 2*(qx*qx + qz*qz);
 
-    // In BCF: X=East, Y=North, Z=Up
-    // Cesium heading: 0=North, clockwise positive
-    heading = -(Math.atan2(fwdX, fwdY)) + Math.PI/2;
+    var ex = Math.asin(-Math.max(-1, Math.min(1, m23)));
+    var ey, ez;
+    if (Math.abs(m23) < 0.9999999) {
+      ey = Math.atan2(m13, m33);
+      ez = Math.atan2(m21, m22);
+    } else {
+      ey = Math.atan2(-m13, m11);
+      ez = 0;
+    }
 
-    // Pitch: angle above/below horizontal
-    pitch = Math.asin(Math.max(-1, Math.min(1, fwdZ)));
-
+    heading = ey + Math.PI;
+    pitch = -ex;
     roll = 0;
   }
 
