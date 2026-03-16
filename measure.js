@@ -3,7 +3,7 @@ window.toggleArea = function() { if (typeof _toggleArea==='function') _toggleAre
 
 // ── MEASURE TOOL ──────────────────────────────────────────────────────────
 var MEASURE_COLOR = '#FFFFFF';
-var AREA_COLOR = '#FFFFFF';
+var AREA_COLOR = '#F2921C';
 var _measureActive = false;
 var _measurePoints = [];
 var _measureEntities = [];
