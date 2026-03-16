@@ -448,7 +448,7 @@ window.StreamBIM.connect({
   if (el) { el.textContent = '● Disconnected'; el.style.color = '#f04040'; }
 });
 
-// Must be in first script block so onclick works before second script loads
+// All functions called from HTML inline handlers — must be in first script block
 window.startWidget = function() {
   S.epsg = 'EPSG:' + _epsgSetupCode;
   document.getElementById('crs-current').textContent = 'EPSG:' + _epsgSetupCode;
@@ -457,6 +457,79 @@ window.startWidget = function() {
   document.getElementById('loading-screen').style.display = 'flex';
   loadScripts();
 };
+
+window.searchEpsgSetup = function(val) {
+  clearTimeout(_epsgSearchTimer);
+  var dd = document.getElementById('epsg-setup-results');
+  if (!val || val.length < 1) { dd.innerHTML = ''; return; }
+  dd.innerHTML = '<div style="padding:6px 10px;font-family:DM Mono,monospace;font-size:11px;color:#555">Søker…</div>';
+  _epsgSearchTimer = setTimeout(function() {
+    var url = 'https://epsg.io/?q=' + encodeURIComponent(val) + '&format=json&limit=40';
+    fetch(url).then(function(r){ return r.json(); }).then(function(data) {
+      var results = (data.results || []).filter(function(r){ return r.code && r.name; });
+      if (!results.length) { dd.innerHTML = '<div style="padding:6px 10px;font-family:DM Mono,monospace;font-size:11px;color:#555">Ingen treff</div>'; return; }
+      dd.innerHTML = results.map(function(r) {
+        var name = r.name.replace(/'/g,"\'");
+        return '<div class="epsg-setup-item" onclick="selectEpsgSetup('' + r.code + '','' + name + '')">' +
+          '<span class="epsg-code">' + r.code + '</span>' +
+          '<span class="epsg-name">' + r.name + '</span></div>';
+      }).join('');
+    }).catch(function(){ dd.innerHTML = '<div style="padding:6px 10px;color:#f44">Nettverksfeil</div>'; });
+  }, 250);
+};
+
+window.selectEpsgSetup = function(code, name) {
+  _epsgSetupCode = code;
+  _epsgSetupName = name;
+  document.getElementById('epsg-setup-results').innerHTML = '';
+  document.getElementById('epsg-search-setup').value = '';
+  var el = document.getElementById('epsg-setup-selected');
+  if (el) el.textContent = '✓ ' + code + ' — ' + name;
+};
+
+window.searchEpsg = function(val) {
+  clearTimeout(_epsgSearchTimer);
+  var dd = document.getElementById('epsg-dropdown');
+  if (!val || val.length < 1) { dd.innerHTML = ''; dd.classList.remove('open'); return; }
+  dd.innerHTML = '<div style="padding:6px 10px;font-family:DM Mono,monospace;font-size:11px;color:#555">Søker…</div>';
+  dd.classList.add('open');
+  _epsgSearchTimer = setTimeout(function() {
+    var url = 'https://epsg.io/?q=' + encodeURIComponent(val) + '&format=json&limit=40';
+    fetch(url).then(function(r){ return r.json(); }).then(function(data) {
+      var results = (data.results || []).filter(function(r){ return r.code && r.name; });
+      if (!results.length) { dd.innerHTML = '<div style="padding:6px 10px;font-family:DM Mono,monospace;font-size:11px;color:#555">Ingen treff</div>'; return; }
+      dd.innerHTML = results.map(function(r) {
+        var name = r.name.replace(/'/g,"\'");
+        return '<div class="epsg-item" onclick="selectEpsgTopbar('' + r.code + '','' + name + '')">' +
+          '<span class="epsg-code">' + r.code + '</span>' +
+          '<span class="epsg-name">' + r.name + '</span></div>';
+      }).join('');
+      dd.classList.add('open');
+    }).catch(function(){ dd.innerHTML = '<div style="padding:6px 10px;color:#f44">Nettverksfeil</div>'; });
+  }, 250);
+};
+
+window.selectEpsgTopbar = function(code, name) {
+  S.epsg = 'EPSG:' + code;
+  document.getElementById('crs-search').value = '';
+  document.getElementById('crs-current').textContent = 'EPSG:' + code;
+  document.getElementById('crs-current').title = name;
+  hideEpsgDropdown();
+  if (S.lastCamPos) window._onCamera(S.lastCamPos);
+};
+
+window.showEpsgDropdown = function() {
+  var dd = document.getElementById('epsg-dropdown');
+  if (dd.innerHTML && dd.innerHTML.length > 10) dd.classList.add('open');
+};
+
+window.hideEpsgDropdown = function() {
+  var dd = document.getElementById('epsg-dropdown');
+  if (dd) dd.classList.remove('open');
+};
+
+window.toggleMeasure = function() { if (typeof _toggleMeasure==='function') _toggleMeasure(); };
+window.toggleArea = function() { if (typeof _toggleArea==='function') _toggleArea(); };
 </script>
 
 <!-- Cesium CSS -->
@@ -829,7 +902,7 @@ var _measureActive = false;
 var _measurePoints = [];
 var _measureEntities = [];
 
-function toggleMeasure() {
+function _toggleMeasure() {
   _measureActive = !_measureActive;
   var btn = document.getElementById('measure-btn');
   btn.classList.toggle('active', _measureActive);
@@ -1005,7 +1078,7 @@ var _areaActive = false;
 var _areaPoints = [];
 var _areaEntities = [];
 
-function toggleArea() {
+function _toggleArea() {
   _areaActive = !_areaActive;
   var btn = document.getElementById('area-btn');
   btn.classList.toggle('active', _areaActive);
