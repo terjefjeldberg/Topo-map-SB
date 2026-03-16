@@ -20,6 +20,7 @@ async function enableBuildings(viewer) {
         color: "color('#f4eee6', 0.92)"
       })
     });
+    tileset.shadows = S.lightingEnabled ? Cesium.ShadowMode.ENABLED : Cesium.ShadowMode.DISABLED;
     viewer.scene.primitives.add(tileset);
     viewer.scene.globe.depthTestAgainstTerrain = true;
     S.buildingsTileset = tileset;
@@ -30,6 +31,46 @@ async function enableBuildings(viewer) {
   }
 }
 
+
+
+function syncLightingButton() {
+  var btn = document.getElementById('lighting-btn');
+  if (!btn) return;
+  btn.classList.toggle('active', !!S.lightingEnabled);
+  btn.setAttribute('aria-pressed', S.lightingEnabled ? 'true' : 'false');
+  btn.title = S.lightingEnabled ? 'Skru av lys og skygger' : 'Skru pa lys og skygger';
+}
+
+function setLightingEnabled(enabled) {
+  S.lightingEnabled = enabled !== false;
+  syncLightingButton();
+  if (!S.viewer || typeof Cesium === 'undefined') return;
+
+  var viewer = S.viewer;
+  viewer.shadows = S.lightingEnabled;
+  viewer.terrainShadows = S.lightingEnabled ? Cesium.ShadowMode.ENABLED : Cesium.ShadowMode.DISABLED;
+  viewer.scene.globe.enableLighting = S.lightingEnabled;
+
+  if (viewer.shadowMap) {
+    viewer.shadowMap.enabled = S.lightingEnabled;
+    if ('softShadows' in viewer.shadowMap) viewer.shadowMap.softShadows = true;
+    if ('darkness' in viewer.shadowMap) viewer.shadowMap.darkness = 0.4;
+    if ('maximumDistance' in viewer.shadowMap) viewer.shadowMap.maximumDistance = 8000;
+    if ('size' in viewer.shadowMap) viewer.shadowMap.size = 2048;
+  }
+
+  if (S.buildingsTileset) {
+    S.buildingsTileset.shadows = S.lightingEnabled ? Cesium.ShadowMode.ENABLED : Cesium.ShadowMode.DISABLED;
+  }
+
+  if (viewer.scene && typeof viewer.scene.requestRender === 'function') {
+    viewer.scene.requestRender();
+  }
+}
+
+window.toggleLighting = function() {
+  setLightingEnabled(!S.lightingEnabled);
+};
 
 async function initCesium() {
   _log('Initialising globe…');
@@ -51,6 +92,7 @@ async function initCesium() {
   });
 
   S.viewer = viewer;
+  setLightingEnabled(S.lightingEnabled);
 
   // Red box marker for camera position
   S.marker = viewer.entities.add({
@@ -75,12 +117,14 @@ async function initCesium() {
   window.setNavMode = function(mode) {
     if (!S.api) return;
     S.api.setNavigationMode(mode);
-    document.querySelectorAll('button').forEach(function(b) {
+    document.querySelectorAll('[data-nav-mode]').forEach(function(b) {
       b.style.color = '#666'; b.style.borderColor = '#333';
     });
-    var label = mode === 0 ? 'WALK' : 'ORBIT';
-    document.querySelectorAll('button').forEach(function(b) {
-      if (b.textContent === label) { b.style.color = '#F2921C'; b.style.borderColor = '#F2921C'; }
+    document.querySelectorAll('[data-nav-mode]').forEach(function(b) {
+      if (String(b.getAttribute('data-nav-mode')) === String(mode)) {
+        b.style.color = '#F2921C';
+        b.style.borderColor = '#F2921C';
+      }
     });
   };
 

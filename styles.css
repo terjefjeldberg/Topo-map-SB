@@ -198,6 +198,29 @@
     text-overflow: ellipsis;
   }
 
+
+  .topbar-btn {
+    padding: 4px 9px;
+    background: rgba(0,0,0,0.45);
+    border: 1px solid #333;
+    color: #b8b8b8;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+  }
+  .topbar-btn:hover {
+    border-color: rgba(var(--accent-rgb), 0.35);
+    color: #f7d8b2;
+  }
+  .topbar-btn.active {
+    border-color: rgba(var(--accent-rgb), 0.5);
+    background: rgba(var(--accent-rgb), 0.16);
+    color: var(--accent-color);
+  }
+
   /* Setup search */
   #epsg-search-setup {
     background: #111;
