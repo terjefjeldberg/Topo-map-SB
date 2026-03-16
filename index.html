@@ -470,7 +470,7 @@ window.searchEpsgSetup = function(val) {
       if (!results.length) { dd.innerHTML = '<div style="padding:6px 10px;font-family:DM Mono,monospace;font-size:11px;color:#555">Ingen treff</div>'; return; }
       dd.innerHTML = results.map(function(r) {
         var name = r.name.replace(/'/g,"\'");
-        return '<div class="epsg-setup-item" onclick="selectEpsgSetup('' + r.code + '','' + name + '')">' +
+        return '<div class="epsg-setup-item" onclick="selectEpsgSetup(' + JSON.stringify(r.code) + ',' + JSON.stringify(r.name) + ')">' +
           '<span class="epsg-code">' + r.code + '</span>' +
           '<span class="epsg-name">' + r.name + '</span></div>';
       }).join('');
@@ -500,7 +500,7 @@ window.searchEpsg = function(val) {
       if (!results.length) { dd.innerHTML = '<div style="padding:6px 10px;font-family:DM Mono,monospace;font-size:11px;color:#555">Ingen treff</div>'; return; }
       dd.innerHTML = results.map(function(r) {
         var name = r.name.replace(/'/g,"\'");
-        return '<div class="epsg-item" onclick="selectEpsgTopbar('' + r.code + '','' + name + '')">' +
+        return '<div class="epsg-item" onclick="selectEpsgTopbar(' + JSON.stringify(r.code) + ',' + JSON.stringify(r.name) + ')">' +
           '<span class="epsg-code">' + r.code + '</span>' +
           '<span class="epsg-name">' + r.name + '</span></div>';
       }).join('');
