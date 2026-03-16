@@ -7,6 +7,30 @@ function loadScripts() {
   document.head.appendChild(s);
 }
 
+async function enableBuildings(viewer) {
+  if (!viewer || typeof Cesium.createOsmBuildingsAsync !== 'function') {
+    _log('3D buildings not supported in this Cesium build', 'warn');
+    return;
+  }
+
+  try {
+    _log('Loading 3D buildings...');
+    var tileset = await Cesium.createOsmBuildingsAsync({
+      style: new Cesium.Cesium3DTileStyle({
+        color: "color('#f4eee6', 0.92)"
+      })
+    });
+    viewer.scene.primitives.add(tileset);
+    viewer.scene.globe.depthTestAgainstTerrain = true;
+    S.buildingsTileset = tileset;
+    _log('3D buildings enabled', 'ok');
+  } catch (err) {
+    console.warn('Failed to load 3D buildings', err);
+    _log('3D buildings unavailable here', 'warn');
+  }
+}
+
+
 async function initCesium() {
   _log('Initialising globe…');
   Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlOGNmZDViOS0wZWYwLTQ1ZjktODkwZS0wNGJiODM4YTdjM2EiLCJpZCI6NDAyNDEwLCJpYXQiOjE3NzMzMDk4OTd9.yqBK0ZLNU-S9J2K-0xxMWc34Kzdlb0oCxgNOY4ADGDs';
@@ -37,6 +61,8 @@ async function initCesium() {
       material: Cesium.Color.RED.withAlpha(0.85)
     }
   });
+
+  enableBuildings(viewer);
 
   _log('Globe ready', 'ok');
   document.getElementById('loading-screen').style.display = 'none';
