@@ -54,7 +54,7 @@ async function initCesium() {
     });
     var label = mode === 0 ? 'WALK' : 'ORBIT';
     document.querySelectorAll('button').forEach(function(b) {
-      if (b.textContent === label) { b.style.color = '#00d4ff'; b.style.borderColor = '#00d4ff'; }
+      if (b.textContent === label) { b.style.color = '#F2921C'; b.style.borderColor = '#F2921C'; }
     });
   };
 
