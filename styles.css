@@ -98,15 +98,22 @@
     border-radius: 4px;
     transition: border-color 0.2s;
   }
-  #measure-btn.active { border-color: #00d4ff; color: #00d4ff; }
+  #measure-btn.active { border-color: #FFFFFF; color: #FFFFFF; }
   #measure-result {
     font-family: 'DM Mono', monospace;
     font-size: 11px;
-    color: #00d4ff;
+    color: #FFFFFF;
     margin-top: 6px;
     white-space: nowrap;
-    text-shadow: 0 0 8px #00d4ff44;
+    display: inline-block;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(12,12,12,0.58);
+    backdrop-filter: blur(4px);
+    text-shadow: 0 1px 8px rgba(0,0,0,0.75);
   }
+  #measure-result:empty { display: none; }
 
   /* Profile */
   #profile-panel {

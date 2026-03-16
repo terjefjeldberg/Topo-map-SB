@@ -2,6 +2,8 @@ window.toggleMeasure = function() { if (typeof _toggleMeasure==='function') _tog
 window.toggleArea = function() { if (typeof _toggleArea==='function') _toggleArea(); };
 
 // ── MEASURE TOOL ──────────────────────────────────────────────────────────
+var MEASURE_COLOR = '#FFFFFF';
+var AREA_COLOR = '#00d4ff';
 var _measureActive = false;
 var _measurePoints = [];
 var _measureEntities = [];
@@ -34,6 +36,76 @@ function haversineM(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
+function createReadableLabel(text, fillColor) {
+  return {
+    text: text,
+    font: '13px DM Mono, monospace',
+    fillColor: Cesium.Color.fromCssColorString(fillColor || '#FFFFFF'),
+    outlineColor: Cesium.Color.BLACK,
+    outlineWidth: 3,
+    style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+    showBackground: true,
+    backgroundColor: Cesium.Color.fromCssColorString('#101010').withAlpha(0.78),
+    backgroundPadding: new Cesium.Cartesian2(10, 6),
+    disableDepthTestDistance: Number.POSITIVE_INFINITY
+  };
+}
+
+function getAreaCentroid(pts) {
+  if (!pts.length) return null;
+
+  var midLat = pts.reduce(function(sum, p) { return sum + p.lat; }, 0) / pts.length;
+  var metersPerDegLat = 111320;
+  var metersPerDegLon = 111320 * Math.cos(midLat * Math.PI / 180);
+  var twiceArea = 0;
+  var cx = 0;
+  var cy = 0;
+  var alt = 0;
+
+  for (var i = 0; i < pts.length; i++) {
+    var j = (i + 1) % pts.length;
+    var xi = pts[i].lon * metersPerDegLon;
+    var yi = pts[i].lat * metersPerDegLat;
+    var xj = pts[j].lon * metersPerDegLon;
+    var yj = pts[j].lat * metersPerDegLat;
+    var cross = xi * yj - xj * yi;
+    twiceArea += cross;
+    cx += (xi + xj) * cross;
+    cy += (yi + yj) * cross;
+    alt += pts[i].alt;
+  }
+
+  alt = alt / pts.length;
+
+  if (Math.abs(twiceArea) < 1e-6) {
+    return {
+      lon: pts.reduce(function(sum, p) { return sum + p.lon; }, 0) / pts.length,
+      lat: pts.reduce(function(sum, p) { return sum + p.lat; }, 0) / pts.length,
+      alt: alt
+    };
+  }
+
+  return {
+    lon: (cx / (3 * twiceArea)) / metersPerDegLon,
+    lat: (cy / (3 * twiceArea)) / metersPerDegLat,
+    alt: alt
+  };
+}
+
+function addAreaSummaryLabel(pts, area, perimeter) {
+  var center = getAreaCentroid(pts);
+  if (!center) return;
+
+  _areaEntities.push(S.viewer.entities.add({
+    position: Cesium.Cartesian3.fromDegrees(center.lon, center.lat, center.alt + 4),
+    label: Object.assign(createReadableLabel('Areal ' + formatArea(area) + '\nOmk ' + Math.round(perimeter) + ' m', '#FFFFFF'), {
+      horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+      verticalOrigin: Cesium.VerticalOrigin.CENTER,
+      pixelOffset: new Cesium.Cartesian2(0, 0)
+    })
+  }));
+}
+
 // Hook into Cesium click for measure
 function initMeasureHandler() {
   var handler = new Cesium.ScreenSpaceEventHandler(S.viewer.scene.canvas);
@@ -52,7 +124,7 @@ function initMeasureHandler() {
     // Add dot
     _measureEntities.push(S.viewer.entities.add({
       position: pos,
-      point: { pixelSize: 8, color: Cesium.Color.fromCssColorString('#00d4ff'), outlineColor: Cesium.Color.WHITE, outlineWidth: 1 }
+      point: { pixelSize: 8, color: Cesium.Color.fromCssColorString(MEASURE_COLOR), outlineColor: Cesium.Color.BLACK, outlineWidth: 1 }
     }));
 
     if (_measurePoints.length === 1) {
@@ -70,7 +142,7 @@ function initMeasureHandler() {
           positions: [Cesium.Cartesian3.fromDegrees(p1.lon,p1.lat,p1.alt),
                       Cesium.Cartesian3.fromDegrees(p2.lon,p2.lat,p2.alt)],
           width: 2,
-          material: new Cesium.ColorMaterialProperty(Cesium.Color.fromCssColorString('#00d4ff').withAlpha(0.85)),
+          material: new Cesium.ColorMaterialProperty(Cesium.Color.fromCssColorString(MEASURE_COLOR).withAlpha(0.85)),
           clampToGround: false
         }
       }));
@@ -80,15 +152,10 @@ function initMeasureHandler() {
       var distTxt = hDist >= 1000 ? (hDist/1000).toFixed(2)+' km' : Math.round(hDist)+' m';
       _measureEntities.push(S.viewer.entities.add({
         position: Cesium.Cartesian3.fromDegrees(midLon, midLat, midAlt),
-        label: {
-          text: distTxt,
-          font: '13px DM Mono, monospace',
-          fillColor: Cesium.Color.fromCssColorString('#00d4ff'),
-          outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
-          style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+        label: Object.assign(createReadableLabel(distTxt, MEASURE_COLOR), {
           verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
           pixelOffset: new Cesium.Cartesian2(0, -8)
-        }
+        })
       }));
 
       var res = distTxt + ' horiz';
@@ -131,12 +198,12 @@ function drawProfile(p1, p2) {
     ctx.clearRect(0,0,W,H);
 
     // Grid lines
-    ctx.strokeStyle = 'rgba(0,212,255,0.1)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
     ctx.lineWidth = 1;
     for (var g = 0; g <= 4; g++) {
       var gy = H - (g/4)*(H-20) - 10;
       ctx.beginPath(); ctx.moveTo(0,gy); ctx.lineTo(W,gy); ctx.stroke();
-      ctx.fillStyle = 'rgba(0,212,255,0.5)';
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
       ctx.font = '9px DM Mono, monospace';
       ctx.fillText(Math.round(minA + (g/4)*range)+'m', 2, gy-2);
     }
@@ -151,14 +218,14 @@ function drawProfile(p1, p2) {
     });
     ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath();
     var grad = ctx.createLinearGradient(0,0,0,H);
-    grad.addColorStop(0,'rgba(0,212,255,0.5)');
-    grad.addColorStop(1,'rgba(0,212,255,0.05)');
+    grad.addColorStop(0,'rgba(255,255,255,0.32)');
+    grad.addColorStop(1,'rgba(255,255,255,0.04)');
     ctx.fillStyle = grad;
     ctx.fill();
 
     // Line
     ctx.beginPath();
-    ctx.strokeStyle = '#00d4ff';
+    ctx.strokeStyle = MEASURE_COLOR;
     ctx.lineWidth = 1.5;
     alts.forEach(function(a, i) {
       var x = (i/steps)*W;
@@ -170,7 +237,7 @@ function drawProfile(p1, p2) {
     // Start/end labels
     var hDist = haversineM(p1.lat, p1.lon, p2.lat, p2.lon);
     var distTxt = hDist >= 1000 ? (hDist/1000).toFixed(1)+'km' : Math.round(hDist)+'m';
-    ctx.fillStyle = 'rgba(0,212,255,0.7)';
+    ctx.fillStyle = 'rgba(255,255,255,0.72)';
     ctx.font = '9px DM Mono, monospace';
     ctx.fillText('0', 2, H-2);
     ctx.fillText(distTxt, W-30, H-2);
@@ -194,6 +261,7 @@ function _toggleArea() {
     clearArea();
     document.getElementById('measure-result').textContent = '';
   } else {
+    clearArea();
     document.getElementById('measure-result').textContent = 'Klikk punkter — dobbeltklikk for å avslutte';
   }
 }
@@ -249,7 +317,7 @@ function redrawAreaPolygon() {
     _areaEntities.push(S.viewer.entities.add({
       polygon: {
         hierarchy: new Cesium.PolygonHierarchy(polyPositions),
-        material: Cesium.Color.fromCssColorString('#00d4ff').withAlpha(0.18),
+        material: Cesium.Color.fromCssColorString(AREA_COLOR).withAlpha(0.18),
         outline: false,
         perPositionHeight: true
       }
@@ -296,7 +364,7 @@ function initAreaHandler() {
       position: Cesium.Cartesian3.fromDegrees(lon, lat, alt + 2),
       point: {
         pixelSize: 7,
-        color: Cesium.Color.fromCssColorString('#00d4ff'),
+        color: Cesium.Color.fromCssColorString(AREA_COLOR),
         outlineColor: Cesium.Color.WHITE,
         outlineWidth: 1
       }
@@ -320,11 +388,10 @@ function initAreaHandler() {
         perimeter += haversineM(_areaPoints[i].lat, _areaPoints[i].lon,
                                 _areaPoints[j].lat, _areaPoints[j].lon);
       }
-      var perimTxt = perimeter >= 1000
-        ? (perimeter/1000).toFixed(2) + ' km'
-        : Math.round(perimeter) + ' m';
+      var perimTxt = Math.round(perimeter) + ' m';
       document.getElementById('measure-result').textContent =
         '⬡ ' + formatArea(area) + '   omk: ' + perimTxt;
+      addAreaSummaryLabel(_areaPoints, area, perimeter);
     }
     _areaActive = false;
     document.getElementById('area-btn').classList.remove('active');
