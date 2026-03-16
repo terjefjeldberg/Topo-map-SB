@@ -38,6 +38,144 @@ async function enableBuildings(viewer) {
   }
 }
 
+var BUILDING_HOVER_COLOR = "#F2921C";
+var BUILDING_SELECTED_COLOR = "#FFF4D6";
+
+function requestSceneRender() {
+  if (
+    S.viewer &&
+    S.viewer.scene &&
+    typeof S.viewer.scene.requestRender === "function"
+  ) {
+    S.viewer.scene.requestRender();
+  }
+}
+
+function setBuildingFeatureColor(feature, colorCss, alpha) {
+  if (!feature || typeof Cesium === "undefined") return;
+  try {
+    feature.color = Cesium.Color.fromCssColorString(colorCss).withAlpha(
+      typeof alpha === "number" ? alpha : 1,
+    );
+  } catch (_err) {}
+}
+
+function resetBuildingFeatureColor(feature) {
+  if (!feature || typeof Cesium === "undefined") return;
+  try {
+    feature.color = Cesium.Color.WHITE;
+  } catch (_err) {}
+}
+
+function isBuildingFeature(picked) {
+  if (!picked || typeof Cesium === "undefined" || !S.buildingsTileset)
+    return false;
+
+  var isTileFeature =
+    (typeof Cesium.Cesium3DTileFeature !== "undefined" &&
+      picked instanceof Cesium.Cesium3DTileFeature) ||
+    (typeof Cesium.ModelFeature !== "undefined" &&
+      picked instanceof Cesium.ModelFeature);
+
+  if (!isTileFeature) return false;
+
+  return (
+    picked.primitive === S.buildingsTileset ||
+    picked.tileset === S.buildingsTileset ||
+    (picked.content && picked.content.tileset === S.buildingsTileset)
+  );
+}
+
+function clearHoveredBuilding() {
+  if (!S.hoveredBuildingFeature) return;
+  if (S.hoveredBuildingFeature !== S.selectedBuildingFeature) {
+    resetBuildingFeatureColor(S.hoveredBuildingFeature);
+  }
+  S.hoveredBuildingFeature = null;
+}
+
+function clearSelectedBuilding() {
+  if (!S.selectedBuildingFeature) return;
+  if (S.selectedBuildingFeature === S.hoveredBuildingFeature) {
+    setBuildingFeatureColor(
+      S.selectedBuildingFeature,
+      BUILDING_HOVER_COLOR,
+      0.95,
+    );
+  } else {
+    resetBuildingFeatureColor(S.selectedBuildingFeature);
+  }
+  S.selectedBuildingFeature = null;
+}
+
+function setHoveredBuilding(feature) {
+  if (S.hoveredBuildingFeature === feature) return;
+  clearHoveredBuilding();
+  S.hoveredBuildingFeature = feature || null;
+  if (feature && feature !== S.selectedBuildingFeature) {
+    setBuildingFeatureColor(feature, BUILDING_HOVER_COLOR, 0.95);
+  }
+  if (S.viewer && S.viewer.container) {
+    S.viewer.container.style.cursor = feature ? "pointer" : "";
+  }
+  requestSceneRender();
+}
+
+function setSelectedBuilding(feature) {
+  if (S.selectedBuildingFeature === feature) return;
+  clearSelectedBuilding();
+  S.selectedBuildingFeature = feature || null;
+  if (feature) {
+    setBuildingFeatureColor(feature, BUILDING_SELECTED_COLOR, 0.98);
+  }
+  requestSceneRender();
+}
+
+function initBuildingInteraction(viewer) {
+  if (!viewer || typeof Cesium === "undefined") return;
+  if (S.buildingHoverHandler) {
+    S.buildingHoverHandler.destroy();
+    S.buildingHoverHandler = null;
+  }
+
+  var handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+
+  handler.setInputAction(function (movement) {
+    if (
+      (typeof _measureActive !== "undefined" && _measureActive) ||
+      (typeof _areaActive !== "undefined" && _areaActive)
+    ) {
+      setHoveredBuilding(null);
+      return;
+    }
+    var picked = viewer.scene.pick(movement.endPosition);
+    setHoveredBuilding(isBuildingFeature(picked) ? picked : null);
+  }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
+  handler.setInputAction(function (click) {
+    if (
+      (typeof _measureActive !== "undefined" && _measureActive) ||
+      (typeof _areaActive !== "undefined" && _areaActive)
+    )
+      return;
+    var picked = viewer.scene.pick(click.position);
+    var feature = isBuildingFeature(picked) ? picked : null;
+    if (!feature) {
+      clearSelectedBuilding();
+      requestSceneRender();
+      return;
+    }
+    if (feature === S.selectedBuildingFeature) {
+      clearSelectedBuilding();
+      requestSceneRender();
+      return;
+    }
+    setSelectedBuilding(feature);
+  }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+  S.buildingHoverHandler = handler;
+}
+
 function syncBaseMapButton() {
   var btn = document.getElementById("basemap-btn");
   var mode = S.baseMapMode === "kart" ? "kart" : "foto";
@@ -198,6 +336,7 @@ async function initCesium() {
   });
 
   enableBuildings(viewer);
+  initBuildingInteraction(viewer);
 
   _log("Globe ready", "ok");
   document.getElementById("loading-screen").style.display = "none";
