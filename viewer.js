@@ -182,9 +182,10 @@ async function initCesium() {
   });
 
   S.viewer = viewer;
-  syncBaseMapButton();
-  await setBaseMapMode(S.baseMapMode || "foto");
   setLightingEnabled(!!S.nightMode);
+  S.baseMapMode = S.baseMapMode || "foto";
+  syncBaseMapButton();
+  setBaseMapMode(S.baseMapMode);
 
   // Red box marker for camera position
   S.marker = viewer.entities.add({
