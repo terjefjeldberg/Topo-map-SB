@@ -59,8 +59,8 @@
   /* Compass */
   #compass {
     position: fixed;
-    bottom: 90px;
-    left: 12px;
+    bottom: 16px;
+    right: 16px;
     width: 60px;
     text-align: center;
     z-index: 20;
@@ -103,24 +103,6 @@
     white-space: nowrap;
     text-shadow: 0 0 8px #00d4ff44;
   }
-
-  /* Sight btn */
-  #sight-btn {
-    position: fixed;
-    bottom: 210px;
-    left: 12px;
-    background: rgba(0,0,0,0.7);
-    border: 1px solid #333;
-    color: #ccc;
-    width: 36px; height: 36px;
-    cursor: pointer;
-    font-size: 16px;
-    display: flex; align-items: center; justify-content: center;
-    border-radius: 4px;
-    z-index: 20;
-    transition: border-color 0.2s;
-  }
-  #sight-btn.active { border-color: #00d4ff; color: #00d4ff; }
 
   /* Profile */
   #profile-panel {
@@ -411,9 +393,6 @@ window.StreamBIM.connect({
   <div id="measure-result"></div>
 </div>
 
-<!-- Sight line toggle -->
-<button id="sight-btn" onclick="toggleSightLine()" title="Siktlinje">👁</button>
-
 <!-- Profile panel -->
 <div id="profile-panel" style="display:none">
   <div id="profile-title">HØYDEPROFIL</div>
@@ -661,8 +640,6 @@ function flyTo(lon, lat, alt, quat, computedHeading) {
     if (hdgEl) hdgEl.textContent = String(Math.round(deg)).padStart(3,'0') + '°';
   }
 
-  // Update sight line if active
-  if (window._sightActive) updateSightLine(lon, lat, viewAlt, heading, pitch);
 }
 
 // ── MEASURE TOOL ──────────────────────────────────────────────────────────
@@ -838,47 +815,6 @@ function drawProfile(p1, p2) {
     ctx.font = '9px DM Mono, monospace';
     ctx.fillText('0', 2, H-2);
     ctx.fillText(distTxt, W-30, H-2);
-  });
-}
-
-// ── SIGHT LINE ─────────────────────────────────────────────────────────────
-var _sightActive = false;
-var _sightEntity = null;
-
-function toggleSightLine() {
-  _sightActive = !_sightActive;
-  var btn = document.getElementById('sight-btn');
-  btn.classList.toggle('active', _sightActive);
-  if (!_sightActive && _sightEntity) {
-    S.viewer.entities.remove(_sightEntity);
-    _sightEntity = null;
-  }
-}
-
-function updateSightLine(lon, lat, alt, heading, pitch) {
-  if (!S.viewer) return;
-  var dist = 2000; // 2km sightline
-  var dLat = Math.cos(heading) * Math.cos(pitch) * dist / 111320;
-  var dLon = Math.sin(heading) * Math.cos(pitch) * dist / (111320 * Math.cos(lat*Math.PI/180));
-  var dAlt = Math.sin(pitch) * dist;
-
-  var endLat = lat + dLat;
-  var endLon = lon + dLon;
-  var endAlt = Math.max(alt + dAlt, 0);
-
-  var start = Cesium.Cartesian3.fromDegrees(lon, lat, alt);
-  var end = Cesium.Cartesian3.fromDegrees(endLon, endLat, endAlt);
-
-  if (_sightEntity) S.viewer.entities.remove(_sightEntity);
-  _sightEntity = S.viewer.entities.add({
-    polyline: {
-      positions: [start, end],
-      width: 1.5,
-      material: new Cesium.PolylineDashMaterialProperty({
-        color: Cesium.Color.fromCssColorString('#ffcc00').withAlpha(0.7),
-        dashLength: 16
-      })
-    }
   });
 }
 
