@@ -2,7 +2,8 @@
 window._sbState = {
   epsg: 'EPSG:5946',
   pending: [], ready: false,
-  viewer: null, marker: null, lastPos: null
+  viewer: null, marker: null, lastPos: null,
+  api: null, unsupportedEpsg: null
 };
 var S = window._sbState;
 var _epsgSetupCode = "5946";
@@ -143,10 +144,44 @@ var _tmParams = {
   'EPSG:32633': { lon0: 15.0, lat0: 0,  x0: 500000, y0: 0 }
 };
 
+function normalizeEpsgKey(value) {
+  var epsgKey = value == null ? '' : String(value).trim().toUpperCase();
+  if (!epsgKey) return '';
+  if (epsgKey.indexOf('EPSG:') !== 0) epsgKey = 'EPSG:' + epsgKey.replace(/^EPSG/i, '').trim();
+  return epsgKey;
+}
+
+function getTmParams(epsg) {
+  var epsgKey = normalizeEpsgKey(epsg);
+  return epsgKey && _tmParams[epsgKey] ? _tmParams[epsgKey] : null;
+}
+
+function setHeightReadout(rawAlt) {
+  var el = document.getElementById('v-alt');
+  if (!el || typeof rawAlt !== 'number' || isNaN(rawAlt)) return;
+  el.textContent = 'H  ' + Math.abs(rawAlt).toFixed(1) + ' m';
+}
+
+function warnUnsupportedCrs(epsg, name) {
+  var epsgKey = normalizeEpsgKey(epsg);
+  var label = name ? epsgKey + ' — ' + name : epsgKey;
+  var msg = 'CRS ikke støttet ennå: ' + label;
+  var result = document.getElementById('measure-result');
+  if (result) result.textContent = msg;
+  _log(msg, 'warn');
+}
+
 function toWgs84(easting, northing) {
-  var epsgKey = S.epsg ? S.epsg.toString().trim().toUpperCase() : '';
-  if (epsgKey.indexOf('EPSG:') === -1) epsgKey = 'EPSG:' + epsgKey.replace('EPSG','').trim();
-  var p = _tmParams[epsgKey] || _tmParams['EPSG:5946'];
+  var epsgKey = normalizeEpsgKey(S.epsg);
+  var p = getTmParams(epsgKey);
+  if (!p) {
+    if (S.unsupportedEpsg !== epsgKey) {
+      S.unsupportedEpsg = epsgKey;
+      warnUnsupportedCrs(epsgKey);
+    }
+    return null;
+  }
+  S.unsupportedEpsg = null;
   var a=6378137.0, f=1/298.257222101;
   var b=a*(1-f), e2=1-(b/a)*(b/a), k0=1.0;
   var lon0=p.lon0*Math.PI/180, lat0=p.lat0*Math.PI/180;
@@ -217,7 +252,7 @@ window.StreamBIM.connect({
     var va = document.getElementById('v-alt');
     if (vl) vl.textContent = 'E  ' + cam.position.easting.toFixed(1);
     if (vn) vn.textContent = 'N  ' + cam.position.northing.toFixed(1);
-    if (va) va.textContent = 'H  ' + cam.position.alt.toFixed(1) + ' m';
+    if (va) setHeightReadout(cam.position.alt);
 
     if (!S.ready) { S.pending.push({ type: 'cam', d: cam }); return; }
     window._onCamera(cam);
@@ -227,7 +262,11 @@ window.StreamBIM.connect({
     if (!S.ready) { S.pending.push({ type: 'pick', d: res }); return; }
     window._onPick(res);
   }
-}).then(function() {
+}).then(function(api) {
+  S.api = api || null;
+  if (!S.api && window.StreamBIM && typeof window.StreamBIM.getCameraState === 'function') {
+    S.api = window.StreamBIM;
+  }
   S.connected = true;
 }).catch(function(e) {
   var el = document.getElementById('conn-status');
@@ -236,6 +275,12 @@ window.StreamBIM.connect({
 
 // All functions called from HTML inline handlers — must be in first script block
 window.startWidget = function() {
+  if (!getTmParams(_epsgSetupCode)) {
+    warnUnsupportedCrs(_epsgSetupCode, _epsgSetupName);
+    var selected = document.getElementById('epsg-setup-selected');
+    if (selected) selected.textContent = 'Ikke støttet ennå: EPSG:' + _epsgSetupCode;
+    return;
+  }
   S.epsg = 'EPSG:' + _epsgSetupCode;
   document.getElementById('crs-current').textContent = 'EPSG:' + _epsgSetupCode;
   document.getElementById('crs-current').title = _epsgSetupName;
@@ -257,6 +302,12 @@ window.searchEpsgSetup = function(val) {
 };
 
 window.selectEpsgSetup = function(code, name) {
+  if (!getTmParams(code)) {
+    var selected = document.getElementById('epsg-setup-selected');
+    if (selected) selected.textContent = 'Ikke støttet ennå: EPSG:' + code + ' — ' + name;
+    warnUnsupportedCrs(code, name);
+    return;
+  }
   _epsgSetupCode = code;
   _epsgSetupName = name;
   document.getElementById('epsg-setup-results').innerHTML = '';
@@ -279,6 +330,10 @@ window.searchEpsg = function(val) {
 };
 
 window.selectEpsgTopbar = function(code, name) {
+  if (!getTmParams(code)) {
+    warnUnsupportedCrs(code, name);
+    return;
+  }
   S.epsg = 'EPSG:' + code;
   document.getElementById('crs-search').value = '';
   document.getElementById('crs-current').textContent = 'EPSG:' + code;
@@ -336,9 +391,10 @@ function doEpsgSearch(val, dd, isSetup) {
       }
       dd.innerHTML = results.map(function(r) {
         var cls = isSetup ? 'epsg-setup-item' : 'epsg-item';
+        var safeName = r.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
         var fn = isSetup
-          ? 'selectEpsgSetup('' + r.code + '','' + r.name.replace(/'/g,"\'") + '')'
-          : 'selectEpsgTopbar('' + r.code + '','' + r.name.replace(/'/g,"\'") + '')';
+          ? "selectEpsgSetup('" + r.code + "','" + safeName + "')"
+          : "selectEpsgTopbar('" + r.code + "','" + safeName + "')";
         // Show kind as a small badge
         var kindLabel = '';
         if (r.kind) {
@@ -484,7 +540,7 @@ async function initCesium() {
 
     document.getElementById('v-lat').textContent = 'E  ' + cam.position.easting.toFixed(1);
     document.getElementById('v-lon').textContent = 'N  ' + cam.position.northing.toFixed(1);
-    document.getElementById('v-alt').textContent = 'H  ' + (-cam.position.alt).toFixed(1) + ' m';
+    setHeightReadout(cam.position.alt);
   };
 
   window._onPick = function(res) {
@@ -513,7 +569,7 @@ function flyTo(lon, lat, alt, quat, computedHeading) {
   if (now - _lastUpdate < 16) return;
   _lastUpdate = now;
 
-  var viewAlt = Math.max(50 - alt, 5);
+  var viewAlt = Math.max(50 + Math.abs(alt || 0), 5);
   var dest = Cesium.Cartesian3.fromDegrees(lon, lat, viewAlt);
 
 
@@ -531,8 +587,6 @@ function flyTo(lon, lat, alt, quat, computedHeading) {
     if (!window._quatLogged) {
       window._quatLogged = true;
       console.log('BCF quat:', JSON.stringify({x:qx,y:qy,z:qz,w:qw}));
-      var el = document.getElementById('v-alt');
-      if (el) el.textContent = 'Q: ' + qx.toFixed(3)+','+qy.toFixed(3)+','+qz.toFixed(3)+','+qw.toFixed(3);
     }
     // Same method as byggstyrning: Euler YXZ from quaternion
     var len = Math.sqrt(qx*qx + qy*qy + qz*qz + qw*qw);
@@ -559,6 +613,8 @@ function flyTo(lon, lat, alt, quat, computedHeading) {
     heading = ey + Math.PI;
     pitch = -ex;
     roll = 0;
+  } else if (typeof computedHeading === 'number' && !isNaN(computedHeading)) {
+    heading = computedHeading;
   }
 
   // Use setView for instant, no animation — real-time tracking
