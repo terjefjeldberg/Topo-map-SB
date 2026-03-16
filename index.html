@@ -546,9 +546,7 @@ window.startWidget = function() {
 
 <script>
 // ── EPSG SEARCH ───────────────────────────────────────────────────────────
-var _epsgSearchTimer = null;
-var _epsgSetupCode = '5946';
-var _epsgSetupName = 'NTM sone 6';
+// _epsgSetupCode and _epsgSetupName defined in first script block
 
 function searchEpsg(val) {
   clearTimeout(_epsgSearchTimer);
@@ -563,8 +561,8 @@ function searchEpsgSetup(val) {
   clearTimeout(_epsgSearchTimer);
   var dd = document.getElementById('epsg-setup-results');
   if (!val || val.length < 1) { dd.innerHTML = ''; return; }
-  dd.innerHTML = '<div class="epsg-loading">Søker…</div>';
-  _epsgSearchTimer = setTimeout(function() { doEpsgSearch(val, dd, true); }, 300);
+  dd.innerHTML = '<div class="epsg-loading" style="padding:6px 10px;font-family:DM Mono,monospace;font-size:11px;color:#555">Søker…</div>';
+  _epsgSearchTimer = setTimeout(function() { doEpsgSearch(val, dd, true); }, 250);
 }
 
 function doEpsgSearch(val, dd, isSetup) {
