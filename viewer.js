@@ -38,6 +38,16 @@ async function enableBuildings(viewer) {
   }
 }
 
+function syncBaseMapButton() {
+  var btn = document.getElementById("basemap-btn");
+  var mode = S.baseMapMode === "kart" ? "kart" : "foto";
+  if (!btn) return;
+  btn.classList.toggle("active", mode === "foto");
+  btn.setAttribute("aria-pressed", mode === "foto" ? "true" : "false");
+  btn.textContent = mode === "foto" ? "FOTO" : "KART";
+  btn.title = mode === "foto" ? "Bytt til kart" : "Bytt til ortofoto";
+}
+
 function syncLightingButton() {
   var btn = document.getElementById("lighting-btn");
   if (!btn) return;
@@ -103,6 +113,52 @@ window.toggleLighting = function () {
   setLightingEnabled(!S.nightMode);
 };
 
+async function getBaseMapProvider(mode) {
+  if (!S.baseMapProviders) S.baseMapProviders = {};
+  if (S.baseMapProviders[mode]) return S.baseMapProviders[mode];
+
+  var url =
+    mode === "kart"
+      ? "https://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer"
+      : "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer";
+
+  var provider = Cesium.ArcGisMapServerImageryProvider.fromUrl
+    ? await Cesium.ArcGisMapServerImageryProvider.fromUrl(url)
+    : new Cesium.ArcGisMapServerImageryProvider({ url: url });
+
+  S.baseMapProviders[mode] = provider;
+  return provider;
+}
+
+async function setBaseMapMode(mode) {
+  var nextMode = mode === "kart" ? "kart" : "foto";
+  S.baseMapMode = nextMode;
+  syncBaseMapButton();
+  if (!S.viewer || typeof Cesium === "undefined") return;
+
+  try {
+    var provider = await getBaseMapProvider(nextMode);
+    var layers = S.viewer.imageryLayers;
+    if (S.baseMapLayer) {
+      layers.remove(S.baseMapLayer, false);
+      S.baseMapLayer = null;
+    } else {
+      while (layers.length > 0) layers.remove(layers.get(0), false);
+    }
+    S.baseMapLayer = layers.addImageryProvider(provider, 0);
+    if (S.viewer.scene && typeof S.viewer.scene.requestRender === "function") {
+      S.viewer.scene.requestRender();
+    }
+  } catch (err) {
+    console.warn("Failed to switch basemap", err);
+    _log("Basemap unavailable", "warn");
+  }
+}
+
+window.toggleBaseMap = function () {
+  setBaseMapMode(S.baseMapMode === "foto" ? "kart" : "foto");
+};
+
 async function initCesium() {
   _log("Initialising globe…");
   Cesium.Ion.defaultAccessToken =
@@ -126,6 +182,8 @@ async function initCesium() {
   });
 
   S.viewer = viewer;
+  syncBaseMapButton();
+  await setBaseMapMode(S.baseMapMode || "foto");
   setLightingEnabled(!!S.nightMode);
 
   // Red box marker for camera position
