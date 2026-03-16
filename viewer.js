@@ -38,7 +38,8 @@ function syncLightingButton() {
   if (!btn) return;
   btn.classList.toggle('active', !!S.lightingEnabled);
   btn.setAttribute('aria-pressed', S.lightingEnabled ? 'true' : 'false');
-  btn.title = S.lightingEnabled ? 'Skru av lys og skygger' : 'Skru pa lys og skygger';
+  btn.textContent = S.lightingEnabled ? 'DAG' : 'NATT';
+  btn.title = S.lightingEnabled ? 'Bytt til nattvisning' : 'Bytt til dagvisning';
 }
 
 function setLightingEnabled(enabled) {
