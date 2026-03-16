@@ -126,23 +126,41 @@ function epsgSearch(val) {
 
 
 // ── TM parameters for Norwegian NTM and UTM zones ──
-var _tmParams = {
-  'EPSG:5941': { lon0: 6.5,  lat0: 58, x0: 100000, y0: 1000000 },
-  'EPSG:5942': { lon0: 7.5,  lat0: 58, x0: 100000, y0: 1000000 },
-  'EPSG:5943': { lon0: 8.5,  lat0: 58, x0: 100000, y0: 1000000 },
-  'EPSG:5944': { lon0: 9.5,  lat0: 58, x0: 100000, y0: 1000000 },
-  'EPSG:5945': { lon0: 10.5, lat0: 58, x0: 100000, y0: 1000000 },
-  'EPSG:5946': { lon0: 6.5,  lat0: 58, x0: 100000, y0: 1000000 },
-  'EPSG:5947': { lon0: 7.5,  lat0: 58, x0: 100000, y0: 1000000 },
-  'EPSG:5948': { lon0: 8.5,  lat0: 58, x0: 100000, y0: 1000000 },
-  'EPSG:5949': { lon0: 9.5,  lat0: 58, x0: 100000, y0: 1000000 },
-  'EPSG:5950': { lon0: 10.5, lat0: 58, x0: 100000, y0: 1000000 },
-  'EPSG:5545': { lon0: 18.0, lat0: 0,  x0: 500000, y0: 0 },
-  'EPSG:25832': { lon0: 9.0,  lat0: 0,  x0: 500000, y0: 0 },
-  'EPSG:25833': { lon0: 15.0, lat0: 0,  x0: 500000, y0: 0 },
-  'EPSG:32632': { lon0: 9.0,  lat0: 0,  x0: 500000, y0: 0 },
-  'EPSG:32633': { lon0: 15.0, lat0: 0,  x0: 500000, y0: 0 }
-};
+var _projectionDefs = buildProjectionDefs();
+
+function buildNtmDef(zone) {
+  return '+proj=tmerc +lat_0=58 +lon_0=' + (zone + 0.5) + ' +k=1 +x_0=100000 +y_0=1000000 +ellps=GRS80 +units=m +no_defs +type=crs';
+}
+
+function buildEtrsUtmDef(zone) {
+  return '+proj=utm +zone=' + zone + ' +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs +type=crs';
+}
+
+function buildWgs84UtmDef(zone, south) {
+  return '+proj=utm +zone=' + zone + (south ? ' +south' : '') + ' +datum=WGS84 +units=m +no_defs +type=crs';
+}
+
+function buildProjectionDefs() {
+  var defs = {
+    'EPSG:4230': '+proj=longlat +datum=ED50 +no_defs +type=crs',
+    'EPSG:4258': '+proj=longlat +ellps=GRS80 +no_defs +type=crs',
+    'EPSG:4326': '+proj=longlat +datum=WGS84 +no_defs +type=crs',
+    'EPSG:3857': '+proj=merc +a=6378137 +b=6378137 +lat_ts=0 +lon_0=0 +x_0=0 +y_0=0 +k=1 +units=m +nadgrids=@null +wktext +no_defs +type=crs',
+    'EPSG:900913': '+proj=merc +a=6378137 +b=6378137 +lat_ts=0 +lon_0=0 +x_0=0 +y_0=0 +k=1 +units=m +nadgrids=@null +wktext +no_defs +type=crs'
+  };
+  var zone;
+  for (zone = 1; zone <= 10; zone++) {
+    defs['EPSG:' + (5940 + zone)] = buildNtmDef(zone);
+  }
+  for (zone = 32; zone <= 35; zone++) {
+    defs['EPSG:258' + zone] = buildEtrsUtmDef(zone);
+  }
+  for (zone = 1; zone <= 60; zone++) {
+    defs['EPSG:' + (32600 + zone)] = buildWgs84UtmDef(zone, false);
+    defs['EPSG:' + (32700 + zone)] = buildWgs84UtmDef(zone, true);
+  }
+  return defs;
+}
 
 function normalizeEpsgKey(value) {
   var epsgKey = value == null ? '' : String(value).trim().toUpperCase();
@@ -151,9 +169,23 @@ function normalizeEpsgKey(value) {
   return epsgKey;
 }
 
-function getTmParams(epsg) {
+function getProjectionDef(epsg) {
   var epsgKey = normalizeEpsgKey(epsg);
-  return epsgKey && _tmParams[epsgKey] ? _tmParams[epsgKey] : null;
+  return epsgKey && _projectionDefs[epsgKey] ? _projectionDefs[epsgKey] : null;
+}
+
+function getTmParams(epsg) {
+  return getProjectionDef(epsg);
+}
+
+function ensureProjectionDefs() {
+  if (typeof window.proj4 !== 'function' || typeof window.proj4.defs !== 'function') return false;
+  if (ensureProjectionDefs._loaded) return true;
+  Object.keys(_projectionDefs).forEach(function(epsgKey) {
+    window.proj4.defs(epsgKey, _projectionDefs[epsgKey]);
+  });
+  ensureProjectionDefs._loaded = true;
+  return true;
 }
 
 function setHeightReadout(rawAlt) {
@@ -162,10 +194,10 @@ function setHeightReadout(rawAlt) {
   el.textContent = 'H  ' + Math.abs(rawAlt).toFixed(1) + ' m';
 }
 
-function warnUnsupportedCrs(epsg, name) {
+function warnUnsupportedCrs(epsg, name, reason) {
   var epsgKey = normalizeEpsgKey(epsg);
-  var label = name ? epsgKey + ' — ' + name : epsgKey;
-  var msg = 'CRS ikke støttet ennå: ' + label;
+  var label = name ? epsgKey + ' - ' + name : epsgKey;
+  var msg = reason ? 'CRS utilgjengelig: ' + label + ' (' + reason + ')' : 'CRS ikke stottet enna: ' + label;
   var result = document.getElementById('measure-result');
   if (result) result.textContent = msg;
   _log(msg, 'warn');
@@ -173,40 +205,37 @@ function warnUnsupportedCrs(epsg, name) {
 
 function toWgs84(easting, northing) {
   var epsgKey = normalizeEpsgKey(S.epsg);
-  var p = getTmParams(epsgKey);
-  if (!p) {
+  var projDef = getProjectionDef(epsgKey);
+  if (!projDef) {
     if (S.unsupportedEpsg !== epsgKey) {
       S.unsupportedEpsg = epsgKey;
       warnUnsupportedCrs(epsgKey);
     }
     return null;
   }
+  if (!ensureProjectionDefs()) {
+    if (S.unsupportedEpsg !== epsgKey + ':proj4') {
+      S.unsupportedEpsg = epsgKey + ':proj4';
+      warnUnsupportedCrs(epsgKey, null, 'proj4 lastet ikke');
+    }
+    return null;
+  }
   S.unsupportedEpsg = null;
-  var a=6378137.0, f=1/298.257222101;
-  var b=a*(1-f), e2=1-(b/a)*(b/a), k0=1.0;
-  var lon0=p.lon0*Math.PI/180, lat0=p.lat0*Math.PI/180;
-  var x=easting-p.x0, y=northing-p.y0;
-  var A0=1-e2/4-3*e2*e2/64-5*e2*e2*e2/256;
-  var A2=3/8*(e2+e2*e2/4+15*e2*e2*e2/128);
-  var A4=15/256*(e2*e2+3*e2*e2*e2/4);
-  var A6=35*e2*e2*e2/3072;
-  var M0=a*(A0*lat0-A2*Math.sin(2*lat0)+A4*Math.sin(4*lat0)-A6*Math.sin(6*lat0));
-  var M=M0+y/k0, mu=M/(a*A0);
-  var e1=(1-Math.sqrt(1-e2))/(1+Math.sqrt(1-e2));
-  var lat_fp=mu+(3*e1/2-27*e1*e1*e1/32)*Math.sin(2*mu)
-    +(21*e1*e1/16-55*e1*e1*e1*e1/32)*Math.sin(4*mu)
-    +(151*e1*e1*e1/96)*Math.sin(6*mu)
-    +(1097*e1*e1*e1*e1/512)*Math.sin(8*mu);
-  var sinFP=Math.sin(lat_fp), cosFP=Math.cos(lat_fp), tanFP=Math.tan(lat_fp);
-  var N1=a/Math.sqrt(1-e2*sinFP*sinFP);
-  var T1=tanFP*tanFP, C1=e2/(1-e2)*cosFP*cosFP;
-  var R1=a*(1-e2)/Math.pow(1-e2*sinFP*sinFP,1.5);
-  var D=x/(N1*k0);
-  var lat=lat_fp-(N1*tanFP/R1)*(D*D/2-(5+3*T1+10*C1-4*C1*C1-9*e2/(1-e2))*D*D*D*D/24);
-  var lon=lon0+(D-(1+2*T1+C1)*D*D*D/6)/cosFP;
-  return { lat: lat*180/Math.PI, lon: lon*180/Math.PI };
+  try {
+    var wgs = window.proj4(epsgKey, 'EPSG:4326', [Number(easting), Number(northing)]);
+    if (!wgs || wgs.length < 2 || isNaN(wgs[0]) || isNaN(wgs[1])) {
+      throw new Error('ugyldig transformresultat');
+    }
+    return { lat: wgs[1], lon: wgs[0] };
+  } catch (err) {
+    console.warn('CRS transform failed for ' + epsgKey, err);
+    if (S.unsupportedEpsg !== epsgKey + ':transform') {
+      S.unsupportedEpsg = epsgKey + ':transform';
+      warnUnsupportedCrs(epsgKey, null, err && err.message ? err.message : 'transformfeil');
+    }
+    return null;
+  }
 }
-
 
 function _log(msg, cls) {
   var el = document.getElementById('log-list');
