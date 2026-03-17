@@ -1,120 +1,276 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Topo map</title>
-<link rel="preconnect" href="https://fonts.googleapis.com"/>
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;700&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cesium@1.136.0/Build/Cesium/Widgets/widgets.css"/>
-<link rel="stylesheet" href="./styles.css?v=20260316-5"/>
-</head>
-<body>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>Topo map</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+            href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;700&display=swap"
+            rel="stylesheet"
+        />
+        <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/npm/cesium@1.136.0/Build/Cesium/Widgets/widgets.css"
+        />
+        <link rel="stylesheet" href="./styles.css?v=20260317-1" />
+    </head>
+    <body>
+        <!-- StreamBIM API — must be first, before anything else -->
+        <script src="./streambim-widget-api.min.js?v=20260317-1"></script>
+        <script src="./proj4.js?v=20260317-1"></script>
 
-<!-- StreamBIM API — must be first, before anything else -->
-<script src="./streambim-widget-api.min.js?v=20260316-5"></script>
-<script src="./proj4.js?v=20260316-5"></script>
+        <!-- Fullscreen Cesium viewport -->
+        <div id="cesiumViewport"></div>
 
+        <!-- Top bar -->
+        <div id="topbar">
+            <span id="topbar-title">TOPO MAP</span>
+            <span id="conn-status">● Connecting…</span>
+            <div id="crs-search-wrap">
+                <input
+                    id="crs-search"
+                    type="text"
+                    placeholder="Søk EPSG… (navn eller kode)"
+                    autocomplete="off"
+                    oninput="searchEpsg(this.value)"
+                    onfocus="showEpsgDropdown()"
+                    onblur="setTimeout(hideEpsgDropdown, 200)"
+                />
+                <div id="epsg-dropdown"></div>
+            </div>
+            <div id="crs-current" title="Aktivt koordinatsystem">EPSG:5946</div>
+            <button
+                id="lighting-btn"
+                class="topbar-btn active"
+                type="button"
+                onclick="toggleLighting()"
+                title="Skru av lys og skygger"
+            >
+                DAG
+            </button>
+            <button
+                id="basemap-btn"
+                class="topbar-btn active"
+                type="button"
+                onclick="toggleBaseMap()"
+                title="Bytt til kart"
+            >
+                FOTO
+            </button>
+        </div>
 
-<!-- Fullscreen Cesium viewport -->
-<div id="cesiumViewport"></div>
+        <!-- Coords overlay -->
+        <div id="coords">
+            <span id="v-lat">—</span><br />
+            <span id="v-lon">—</span><br />
+            <span id="v-alt">—</span>
+        </div>
 
-<!-- Top bar -->
-<div id="topbar">
-  <span id="topbar-title">TOPO MAP</span>
-  <span id="conn-status">● Connecting…</span>
-  <div id="crs-search-wrap">
-    <input id="crs-search" type="text" placeholder="Søk EPSG… (navn eller kode)" autocomplete="off" oninput="searchEpsg(this.value)" onfocus="showEpsgDropdown()" onblur="setTimeout(hideEpsgDropdown,200)"/>
-    <div id="epsg-dropdown"></div>
-  </div>
-  <div id="crs-current" title="Aktivt koordinatsystem">EPSG:5946</div>
-  <button id="lighting-btn" class="topbar-btn active" type="button" onclick="toggleLighting()" title="Skru av lys og skygger">DAG</button>
-  <button id="basemap-btn" class="topbar-btn active" type="button" onclick="toggleBaseMap()" title="Bytt til kart">FOTO</button>
-</div>
+        <!-- Compass -->
+        <div id="compass">
+            <svg
+                id="compass-svg"
+                viewBox="0 0 60 60"
+                xmlns="http://www.w3.org/2000/svg"
+            >
+                <circle
+                    cx="30"
+                    cy="30"
+                    r="28"
+                    fill="rgba(0,0,0,0.55)"
+                    stroke="#F2921C"
+                    stroke-width="1.2"
+                />
+                <text
+                    x="30"
+                    y="10"
+                    text-anchor="middle"
+                    fill="#F2921C"
+                    font-size="9"
+                    font-family="DM Mono,monospace"
+                    font-weight="bold"
+                >
+                    N
+                </text>
+                <text
+                    x="50"
+                    y="33"
+                    text-anchor="middle"
+                    fill="#888"
+                    font-size="8"
+                    font-family="DM Mono,monospace"
+                >
+                    E
+                </text>
+                <text
+                    x="30"
+                    y="54"
+                    text-anchor="middle"
+                    fill="#888"
+                    font-size="8"
+                    font-family="DM Mono,monospace"
+                >
+                    S
+                </text>
+                <text
+                    x="10"
+                    y="33"
+                    text-anchor="middle"
+                    fill="#888"
+                    font-size="8"
+                    font-family="DM Mono,monospace"
+                >
+                    W
+                </text>
+                <g id="compass-needle">
+                    <polygon points="30,8 27,30 30,26 33,30" fill="#F2921C" />
+                    <polygon points="30,52 27,30 30,34 33,30" fill="#c00" />
+                </g>
+                <circle cx="30" cy="30" r="3" fill="#fff" opacity="0.8" />
+            </svg>
+            <div id="compass-hdg">000°</div>
+        </div>
 
-<!-- Coords overlay -->
-<div id="coords">
-  <span id="v-lat">—</span><br>
-  <span id="v-lon">—</span><br>
-  <span id="v-alt">—</span>
-</div>
+        <!-- Measure tool -->
+        <div id="measure-panel">
+            <button
+                id="measure-btn"
+                onclick="toggleMeasure()"
+                title="Avstandsmåling"
+            >
+                📏
+            </button>
+            <button id="area-btn" onclick="toggleArea()" title="Arealberegning">
+                ⬡
+            </button>
+            <div id="measure-result"></div>
+        </div>
 
-<!-- Compass -->
-<div id="compass">
-  <svg id="compass-svg" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="30" cy="30" r="28" fill="rgba(0,0,0,0.55)" stroke="#F2921C" stroke-width="1.2"/>
-    <text x="30" y="10" text-anchor="middle" fill="#F2921C" font-size="9" font-family="DM Mono,monospace" font-weight="bold">N</text>
-    <text x="50" y="33" text-anchor="middle" fill="#888" font-size="8" font-family="DM Mono,monospace">E</text>
-    <text x="30" y="54" text-anchor="middle" fill="#888" font-size="8" font-family="DM Mono,monospace">S</text>
-    <text x="10" y="33" text-anchor="middle" fill="#888" font-size="8" font-family="DM Mono,monospace">W</text>
-    <g id="compass-needle">
-      <polygon points="30,8 27,30 30,26 33,30" fill="#F2921C"/>
-      <polygon points="30,52 27,30 30,34 33,30" fill="#c00"/>
-    </g>
-    <circle cx="30" cy="30" r="3" fill="#fff" opacity="0.8"/>
-  </svg>
-  <div id="compass-hdg">000°</div>
-</div>
+        <!-- Profile panel -->
+        <div id="profile-panel" style="display: none">
+            <div id="profile-title">HØYDEPROFIL</div>
+            <canvas id="profile-canvas" width="320" height="120"></canvas>
+            <button
+                onclick="
+                    document.getElementById('profile-panel').style.display =
+                        'none'
+                "
+                style="
+                    background: none;
+                    border: none;
+                    color: #888;
+                    cursor: pointer;
+                    font-size: 11px;
+                    margin-top: 4px;
+                "
+            >
+                ✕ lukk
+            </button>
+        </div>
 
-<!-- Measure tool -->
-<div id="measure-panel">
-  <button id="measure-btn" onclick="toggleMeasure()" title="Avstandsmåling">📏</button>
-  <button id="area-btn" onclick="toggleArea()" title="Arealberegning">⬡</button>
-  <div id="measure-result"></div>
-</div>
+        <!-- Building info -->
+        <div id="building-info" hidden>
+            <div class="building-info-head">
+                <div id="building-info-title">BYGGINFO</div>
+                <button
+                    id="building-info-close"
+                    type="button"
+                    onclick="clearBuildingSelection()"
+                    title="Lukk bygginfo"
+                >
+                    &#10005;
+                </button>
+            </div>
+            <div id="building-info-body"></div>
+        </div>
 
-<!-- Profile panel -->
-<div id="profile-panel" style="display:none">
-  <div id="profile-title">HØYDEPROFIL</div>
-  <canvas id="profile-canvas" width="320" height="120"></canvas>
-  <button onclick="document.getElementById('profile-panel').style.display='none'" style="background:none;border:none;color:#888;cursor:pointer;font-size:11px;margin-top:4px;">✕ lukk</button>
-</div>
+        <!-- Setup overlay -->
+        <div id="setup-overlay">
+            <div class="setup-card">
+                <h2>TOPO MAP</h2>
+                <p>
+                    Select your project CRS from the presets or enter the EPSG
+                    code manually.
+                </p>
+                <div class="epsg-row">
+                    <input
+                        id="epsg-search-setup"
+                        type="text"
+                        placeholder="Søk koordinatsystem…"
+                        autocomplete="off"
+                        oninput="searchEpsgSetup(this.value)"
+                    />
+                </div>
+                <div id="epsg-setup-results" class="epsg-setup-list"></div>
+                <div id="epsg-setup-selected" class="epsg-selected-label"></div>
+                <div class="presets">
+                    <div
+                        class="p-btn"
+                        onclick="selectEpsgSetup('5946', 'NTM sone 6')"
+                    >
+                        NTM 6
+                    </div>
+                    <div
+                        class="p-btn"
+                        onclick="selectEpsgSetup('5945', 'NTM sone 5')"
+                    >
+                        NTM 5
+                    </div>
+                    <div
+                        class="p-btn"
+                        onclick="selectEpsgSetup('5947', 'NTM sone 7')"
+                    >
+                        NTM 7
+                    </div>
+                    <div
+                        class="p-btn"
+                        onclick="selectEpsgSetup('5948', 'NTM sone 8')"
+                    >
+                        NTM 8
+                    </div>
+                    <div
+                        class="p-btn"
+                        onclick="selectEpsgSetup('5949', 'NTM sone 9')"
+                    >
+                        NTM 9
+                    </div>
+                    <div
+                        class="p-btn"
+                        onclick="selectEpsgSetup('5950', 'NTM sone 10')"
+                    >
+                        NTM 10
+                    </div>
+                    <div
+                        class="p-btn"
+                        onclick="selectEpsgSetup('25832', 'UTM zone 32N')"
+                    >
+                        UTM 32N
+                    </div>
+                    <div
+                        class="p-btn"
+                        onclick="selectEpsgSetup('25833', 'UTM zone 33N')"
+                    >
+                        UTM 33N
+                    </div>
+                </div>
+                <button class="go-btn" onclick="startWidget()">OPEN MAP</button>
+            </div>
+        </div>
 
-<!-- Building info -->
-<div id="building-info" hidden>
-  <div class="building-info-head">
-    <div id="building-info-title">BYGGINFO</div>
-    <button id="building-info-close" type="button" onclick="clearBuildingSelection()" title="Lukk bygginfo">&#10005;</button>
-  </div>
-  <div id="building-info-body"></div>
-</div>
+        <!-- Loading screen -->
+        <div id="loading-screen">
+            <div class="loading-inner">
+                <span class="dot-anim"></span>
+                <div id="log-list"></div>
+            </div>
+        </div>
 
-<!-- Setup overlay -->
-<div id="setup-overlay">
-  <div class="setup-card">
-    <h2>TOPO MAP</h2>
-    <p>Select your project CRS from the presets or enter the EPSG code manually.</p>
-    <div class="epsg-row">
-      <input id="epsg-search-setup" type="text" placeholder="Søk koordinatsystem…" autocomplete="off" oninput="searchEpsgSetup(this.value)"/>
-    </div>
-    <div id="epsg-setup-results" class="epsg-setup-list"></div>
-    <div id="epsg-setup-selected" class="epsg-selected-label"></div>
-    <div class="presets">
-      <div class="p-btn" onclick="selectEpsgSetup('5946','NTM sone 6')">NTM 6</div>
-      <div class="p-btn" onclick="selectEpsgSetup('5945','NTM sone 5')">NTM 5</div>
-      <div class="p-btn" onclick="selectEpsgSetup('5947','NTM sone 7')">NTM 7</div>
-      <div class="p-btn" onclick="selectEpsgSetup('5948','NTM sone 8')">NTM 8</div>
-      <div class="p-btn" onclick="selectEpsgSetup('5949','NTM sone 9')">NTM 9</div>
-      <div class="p-btn" onclick="selectEpsgSetup('5950','NTM sone 10')">NTM 10</div>
-      <div class="p-btn" onclick="selectEpsgSetup('25832','UTM zone 32N')">UTM 32N</div>
-      <div class="p-btn" onclick="selectEpsgSetup('25833','UTM zone 33N')">UTM 33N</div>
-    </div>
-    <button class="go-btn" onclick="startWidget()">OPEN MAP</button>
-  </div>
-</div>
-
-<!-- Loading screen -->
-<div id="loading-screen">
-  <div class="loading-inner">
-    <span class="dot-anim"></span>
-    <div id="log-list"></div>
-  </div>
-</div>
-
-<script src="./state.js?v=20260316-5"></script>
-<script src="./streambim.js?v=20260316-5"></script>
-<script src="./epsg.js?v=20260316-5"></script>
-<script src="./viewer.js?v=20260316-5"></script>
-<script src="./measure.js?v=20260316-5"></script>
-</body>
+        <script src="./config.js?v=20260317-1"></script>
+        <script src="./state.js?v=20260317-1"></script>
+        <script src="./streambim.js?v=20260317-1"></script>
+        <script src="./epsg.js?v=20260317-1"></script>
+        <script src="./viewer.js?v=20260317-1"></script>
+        <script src="./measure.js?v=20260317-1"></script>
+    </body>
 </html>

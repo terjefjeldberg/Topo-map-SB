@@ -459,8 +459,9 @@ window.toggleBaseMap = function () {
 
 async function initCesium() {
   _log("Initialising globe…");
-  Cesium.Ion.defaultAccessToken =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlOGNmZDViOS0wZWYwLTQ1ZjktODkwZS0wNGJiODM4YTdjM2EiLCJpZCI6NDAyNDEwLCJpYXQiOjE3NzMzMDk4OTd9.yqBK0ZLNU-S9J2K-0xxMWc34Kzdlb0oCxgNOY4ADGDs";
+  if (window._sbConfig && window._sbConfig.cesiumIonToken) {
+    Cesium.Ion.defaultAccessToken = window._sbConfig.cesiumIonToken;
+  }
 
   var viewer = new Cesium.Viewer("cesiumViewport", {
     terrainProvider: Cesium.CesiumTerrainProvider.fromIonAssetId
@@ -481,7 +482,11 @@ async function initCesium() {
 
   S.viewer = viewer;
   setLightingEnabled(!!S.nightMode);
-  S.baseMapMode = S.baseMapMode || "foto";
+  S.baseMapMode =
+    S.baseMapMode ||
+    ((window._sbConfig && window._sbConfig.defaultBaseMapMode) === "kart"
+      ? "kart"
+      : "foto");
   syncBaseMapButton();
   setBaseMapMode(S.baseMapMode);
 
