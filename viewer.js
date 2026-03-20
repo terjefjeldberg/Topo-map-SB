@@ -586,12 +586,6 @@ function normalizeAngleRadians(value) {
   return value;
 }
 
-function getConfiguredHeadingOffsetRad() {
-  return Cesium.Math.toRadians(
-    Number((window._sbConfig && window._sbConfig.cameraHeadingOffsetDeg) || 0),
-  );
-}
-
 function flyTo(lon, lat, alt, quat, computedHeading) {
   if (!S.viewer) return;
   if (isNaN(lon) || isNaN(lat)) return;
@@ -663,7 +657,7 @@ function flyTo(lon, lat, alt, quat, computedHeading) {
     heading = computedHeading;
   }
 
-  heading = normalizeAngleRadians(heading + getConfiguredHeadingOffsetRad());
+  heading = normalizeAngleRadians(heading);
 
   // Use setView for instant, no animation — real-time tracking
   S.viewer.camera.setView({
