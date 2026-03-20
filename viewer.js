@@ -537,9 +537,11 @@ async function initCesium() {
   };
 
   window._onCamera = function (cam) {
-    var w = toWgs84(cam.position.easting, cam.position.northing);
-    if (!w) return;
-    var alt = cam.position.alt;
+    var targetPos = cam.target || cam.position;
+    var eyePos = cam.eye || null;
+    var targetW = toWgs84(targetPos.easting, targetPos.northing);
+    if (!targetW) return;
+    var eyeW = eyePos ? toWgs84(eyePos.easting, eyePos.northing) : null;
     var quat = cam.orientation || cam.quaternion;
     if (Array.isArray(quat))
       quat = { x: quat[0], y: quat[1], z: quat[2], w: quat[3] };
@@ -547,8 +549,8 @@ async function initCesium() {
     // Compute heading from movement direction when position changes
     var computedHeading = null;
     if (S.lastPos) {
-      var dE = cam.position.easting - S.lastPos[2];
-      var dN = cam.position.northing - S.lastPos[3];
+      var dE = targetPos.easting - S.lastPos[2];
+      var dN = targetPos.northing - S.lastPos[3];
       var dist = Math.sqrt(dE * dE + dN * dN);
       if (dist > 0.5) {
         // When orbiting, camera points TOWARD orbit center = opposite of travel direction
@@ -557,14 +559,29 @@ async function initCesium() {
       }
     }
     S.lastCamPos = cam;
-    flyTo(w.lon, w.lat, alt, quat, computedHeading);
-    S.lastPos = [w.lon, w.lat, cam.position.easting, cam.position.northing];
+    flyTo({
+      targetLon: targetW.lon,
+      targetLat: targetW.lat,
+      targetAlt: targetPos.alt,
+      eyeLon: eyeW ? eyeW.lon : null,
+      eyeLat: eyeW ? eyeW.lat : null,
+      eyeAlt: eyePos ? eyePos.alt : null,
+      range: cam.range,
+      quat: quat,
+      computedHeading: computedHeading,
+    });
+    S.lastPos = [
+      targetW.lon,
+      targetW.lat,
+      targetPos.easting,
+      targetPos.northing,
+    ];
 
     document.getElementById("v-lat").textContent =
-      "E  " + cam.position.easting.toFixed(1);
+      "E  " + targetPos.easting.toFixed(1);
     document.getElementById("v-lon").textContent =
-      "N  " + cam.position.northing.toFixed(1);
-    setHeightReadout(cam.position.alt);
+      "N  " + targetPos.northing.toFixed(1);
+    setHeightReadout((eyePos || targetPos).alt);
   };
 
   window._onPick = function (res) {
@@ -603,17 +620,25 @@ function getConfiguredMinCameraHeight() {
   );
 }
 
-function flyTo(lon, lat, alt, quat, computedHeading) {
+function flyTo(options) {
   if (!S.viewer) return;
-  if (isNaN(lon) || isNaN(lat)) return;
+  if (!options || isNaN(options.targetLon) || isNaN(options.targetLat)) return;
 
   // Throttle to ~60fps
   var now = Date.now();
   if (now - _lastUpdate < 16) return;
   _lastUpdate = now;
 
-  var viewAlt = Math.max(Number(alt || 0) + 2, getConfiguredMinCameraHeight());
-  var dest = Cesium.Cartesian3.fromDegrees(lon, lat, viewAlt);
+  var targetAlt = Number(options.targetAlt || 0);
+  var viewAlt = Math.max(
+    Number(options.eyeAlt != null ? options.eyeAlt : targetAlt) + 2,
+    getConfiguredMinCameraHeight(),
+  );
+  var dest = Cesium.Cartesian3.fromDegrees(
+    options.targetLon,
+    options.targetLat,
+    viewAlt,
+  );
 
   // Convert BCF quaternion to Cesium HPR
   // BCF: X=East, Y=North, Z=Up (right-handed)
@@ -623,6 +648,8 @@ function flyTo(lon, lat, alt, quat, computedHeading) {
   var heading = 0,
     pitch = Cesium.Math.toRadians(-20),
     roll = 0;
+  var quat = options.quat;
+  var computedHeading = options.computedHeading;
   if (quat) {
     var qx = quat.x,
       qy = quat.y,
@@ -677,12 +704,44 @@ function flyTo(lon, lat, alt, quat, computedHeading) {
   heading = normalizeAngleRadians(heading + getConfiguredHeadingOffsetRad());
 
   // Use setView for instant, no animation — real-time tracking
-  S.viewer.camera.setView({
-    destination: dest,
-    orientation: { heading: heading, pitch: pitch, roll: roll },
-  });
+  if (
+    typeof options.range === "number" &&
+    !isNaN(options.range) &&
+    options.range > 1
+  ) {
+    var target = Cesium.Cartesian3.fromDegrees(
+      options.targetLon,
+      options.targetLat,
+      targetAlt,
+    );
+    S.viewer.camera.lookAt(
+      target,
+      new Cesium.HeadingPitchRange(heading, pitch, options.range),
+    );
+    S.viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+  } else if (
+    typeof options.eyeLon === "number" &&
+    typeof options.eyeLat === "number" &&
+    !isNaN(options.eyeLon) &&
+    !isNaN(options.eyeLat)
+  ) {
+    dest = Cesium.Cartesian3.fromDegrees(
+      options.eyeLon,
+      options.eyeLat,
+      viewAlt,
+    );
+    S.viewer.camera.setView({
+      destination: dest,
+      orientation: { heading: heading, pitch: pitch, roll: roll },
+    });
+  } else {
+    S.viewer.camera.setView({
+      destination: dest,
+      orientation: { heading: heading, pitch: pitch, roll: roll },
+    });
+  }
 
-  S.lastPos = [lon, lat];
+  S.lastPos = [options.targetLon, options.targetLat];
 
   // Update compass
   var needle = document.getElementById("compass-needle");
