@@ -580,12 +580,6 @@ async function initCesium() {
 // Throttle: max 60fps
 var _lastUpdate = 0;
 
-function normalizeAngleRadians(value) {
-  while (value > Math.PI) value -= Math.PI * 2;
-  while (value < -Math.PI) value += Math.PI * 2;
-  return value;
-}
-
 function flyTo(lon, lat, alt, quat, computedHeading) {
   if (!S.viewer) return;
   if (isNaN(lon) || isNaN(lat)) return;
@@ -595,7 +589,7 @@ function flyTo(lon, lat, alt, quat, computedHeading) {
   if (now - _lastUpdate < 16) return;
   _lastUpdate = now;
 
-  var viewAlt = Math.max(Number(alt || 0) + 2, 2);
+  var viewAlt = Math.max(50 + Math.abs(alt || 0), 5);
   var dest = Cesium.Cartesian3.fromDegrees(lon, lat, viewAlt);
 
   // Convert BCF quaternion to Cesium HPR
@@ -642,22 +636,12 @@ function flyTo(lon, lat, alt, quat, computedHeading) {
       ez = 0;
     }
 
-    var rawHeading = ey + Math.PI;
+    heading = ey + Math.PI;
     pitch = -ex;
     roll = 0;
-    if (typeof computedHeading === "number" && !isNaN(computedHeading)) {
-      var biasSample = normalizeAngleRadians(computedHeading - rawHeading);
-      var currentBias = Number(S.cameraHeadingBiasRad || 0);
-      S.cameraHeadingBiasRad = currentBias * 0.85 + biasSample * 0.15;
-      heading = computedHeading;
-    } else {
-      heading = rawHeading + Number(S.cameraHeadingBiasRad || 0);
-    }
   } else if (typeof computedHeading === "number" && !isNaN(computedHeading)) {
     heading = computedHeading;
   }
-
-  heading = normalizeAngleRadians(heading);
 
   // Use setView for instant, no animation — real-time tracking
   S.viewer.camera.setView({
