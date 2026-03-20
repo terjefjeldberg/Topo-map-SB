@@ -1,144 +1,31 @@
-function _getNestedValue(obj, path) {
-  var value = obj;
-  for (var i = 0; i < path.length; i++) {
-    if (!value || typeof value !== "object") return null;
-    value = value[path[i]];
-  }
-  return value == null ? null : value;
-}
-
-function _normalizeVector3(raw) {
-  if (!raw) return null;
-  if (Array.isArray(raw) && raw.length >= 3) {
-    return {
-      easting: Number(raw[0]),
-      alt: Number(raw[1]),
-      northing: Number(raw[2]),
-    };
-  }
-  if (typeof raw === "object") {
-    var easting =
-      raw.easting != null ? raw.easting : raw.x != null ? raw.x : raw.lon;
-    var alt = raw.alt != null ? raw.alt : raw.y != null ? raw.y : raw.height;
-    var northing =
-      raw.northing != null ? raw.northing : raw.z != null ? raw.z : raw.lat;
-    if (easting != null && alt != null && northing != null) {
-      return {
-        easting: Number(easting),
-        alt: Number(alt),
-        northing: Number(northing),
-      };
-    }
-  }
-  return null;
-}
-
-function _normalizeQuaternion(raw) {
-  if (!raw) return null;
-  if (Array.isArray(raw) && raw.length >= 4) {
-    return { x: raw[0], y: raw[1], z: raw[2], w: raw[3] };
-  }
-  if (
-    typeof raw === "object" &&
-    raw.x != null &&
-    raw.y != null &&
-    raw.z != null &&
-    raw.w != null
-  ) {
-    return { x: raw.x, y: raw.y, z: raw.z, w: raw.w };
-  }
-  return null;
-}
-
-function _extractCameraPayload(raw) {
-  if (!raw || typeof raw !== "object") return null;
-
-  var base =
-    _getNestedValue(raw, ["camera"]) ||
-    _getNestedValue(raw, ["cameraState"]) ||
-    _getNestedValue(raw, ["viewport", "camera"]) ||
-    raw;
-
-  var position =
-    _normalizeVector3(base.position) ||
-    _normalizeVector3(base.target) ||
-    _normalizeVector3(base.orbitCenter) ||
-    _normalizeVector3(raw.position);
-  var eye =
-    _normalizeVector3(base.eye) ||
-    _normalizeVector3(base.cameraPosition) ||
-    _normalizeVector3(base.eyePosition) ||
-    _normalizeVector3(raw.eye);
-  var target =
-    _normalizeVector3(base.target) ||
-    _normalizeVector3(base.orbitCenter) ||
-    _normalizeVector3(raw.target) ||
-    position;
-  var orientation =
-    _normalizeQuaternion(base.orientation) ||
-    _normalizeQuaternion(base.quaternion) ||
-    _normalizeQuaternion(raw.orientation) ||
-    _normalizeQuaternion(raw.quaternion);
-  var range =
-    Number(base.range) ||
-    Number(base.distance) ||
-    Number(base.zoomDistance) ||
-    Number(base.cameraDistance) ||
-    Number(raw.range) ||
-    Number(raw.distance);
-
-  if (!position && !eye && !target) return null;
-
-  return {
-    position: position || target || eye,
-    target: target || position || eye,
-    eye: eye || null,
-    orientation: orientation,
-    quaternion: orientation,
-    range: isNaN(range) ? null : range,
-  };
-}
-
-function _fetchBestCameraState() {
-  if (!S || !S.api) return Promise.resolve(null);
-  if (typeof S.api.getViewportState === "function") {
-    return S.api
-      .getViewportState()
-      .then(function (viewport) {
-        if (!window._viewportLogged) {
-          window._viewportLogged = true;
-          console.log("POLL VIEWPORT:", JSON.stringify(viewport));
-        }
-        var normalizedViewport = _extractCameraPayload(viewport);
-        if (normalizedViewport) return normalizedViewport;
-        return typeof S.api.getCameraState === "function"
-          ? S.api.getCameraState()
-          : null;
-      })
-      .then(function (cam) {
-        return _extractCameraPayload(cam);
-      });
-  }
-  if (typeof S.api.getCameraState === "function") {
-    return S.api.getCameraState().then(function (cam) {
-      return _extractCameraPayload(cam);
-    });
-  }
-  return Promise.resolve(null);
-}
-
 // Polling must be defined before StreamBIM.connect fires
 window._startPolling = function () {
   if (window._pollInterval) return;
   window._pollInterval = setInterval(
     function () {
       if (!S || !S.api) return;
-      _fetchBestCameraState()
+      S.api
+        .getCameraState()
         .then(function (cam) {
           if (!cam) return;
           if (!window._pollLogged) {
             window._pollLogged = true;
             console.log("POLL CAM:", JSON.stringify(cam));
+          }
+          if (Array.isArray(cam.position)) {
+            cam.position = {
+              easting: cam.position[0],
+              alt: cam.position[1],
+              northing: cam.position[2],
+            };
+          }
+          if (cam.quaternion && Array.isArray(cam.quaternion)) {
+            cam.orientation = {
+              x: cam.quaternion[0],
+              y: cam.quaternion[1],
+              z: cam.quaternion[2],
+              w: cam.quaternion[3],
+            };
           }
           window._onCamera(cam);
         })
@@ -158,8 +45,13 @@ window.StreamBIM.connect({
     }
     window._startPolling();
     if (!cam) return;
-    cam = _extractCameraPayload(cam);
-    if (!cam) return;
+    var pos = Array.isArray(cam.position)
+      ? cam.position
+      : [cam.position.x, cam.position.y, cam.position.z];
+    cam.position = { easting: pos[0], alt: pos[1], northing: pos[2] };
+    var quat = cam.quaternion || cam.orientation;
+    if (quat && Array.isArray(quat))
+      cam.orientation = { x: quat[0], y: quat[1], z: quat[2], w: quat[3] };
 
     // Update coords display
     var coords = document.getElementById("coords");
@@ -167,10 +59,9 @@ window.StreamBIM.connect({
     var vl = document.getElementById("v-lat");
     var vn = document.getElementById("v-lon");
     var va = document.getElementById("v-alt");
-    var displayPos = cam.eye || cam.target || cam.position;
-    if (vl) vl.textContent = "E  " + displayPos.easting.toFixed(1);
-    if (vn) vn.textContent = "N  " + displayPos.northing.toFixed(1);
-    if (va) setHeightReadout(displayPos.alt);
+    if (vl) vl.textContent = "E  " + cam.position.easting.toFixed(1);
+    if (vn) vn.textContent = "N  " + cam.position.northing.toFixed(1);
+    if (va) setHeightReadout(cam.position.alt);
 
     if (!S.ready) {
       S.pending.push({ type: "cam", d: cam });
@@ -192,8 +83,7 @@ window.StreamBIM.connect({
     if (
       !S.api &&
       window.StreamBIM &&
-      (typeof window.StreamBIM.getCameraState === "function" ||
-        typeof window.StreamBIM.getViewportState === "function")
+      typeof window.StreamBIM.getCameraState === "function"
     ) {
       S.api = window.StreamBIM;
     }
