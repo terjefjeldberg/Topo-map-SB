@@ -481,10 +481,6 @@ async function initCesium() {
   });
 
   S.viewer = viewer;
-  if (viewer.scene && viewer.scene.screenSpaceCameraController) {
-    viewer.scene.screenSpaceCameraController.enableCollisionDetection = false;
-    viewer.scene.screenSpaceCameraController.minimumZoomDistance = 1;
-  }
   setLightingEnabled(!!S.nightMode);
   S.baseMapMode =
     S.baseMapMode ||
@@ -596,13 +592,6 @@ function getConfiguredHeadingOffsetRad() {
   );
 }
 
-function getConfiguredMinCameraHeight() {
-  return Math.max(
-    Number((window._sbConfig && window._sbConfig.minCameraHeightMeters) || 80),
-    2,
-  );
-}
-
 function flyTo(lon, lat, alt, quat, computedHeading) {
   if (!S.viewer) return;
   if (isNaN(lon) || isNaN(lat)) return;
@@ -612,7 +601,7 @@ function flyTo(lon, lat, alt, quat, computedHeading) {
   if (now - _lastUpdate < 16) return;
   _lastUpdate = now;
 
-  var viewAlt = Math.max(Number(alt || 0) + 2, getConfiguredMinCameraHeight());
+  var viewAlt = Math.max(Number(alt || 0) + 2, 2);
   var dest = Cesium.Cartesian3.fromDegrees(lon, lat, viewAlt);
 
   // Convert BCF quaternion to Cesium HPR

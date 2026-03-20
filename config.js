@@ -4,7 +4,6 @@ window._sbConfig = {
   defaultEpsgCode: "5946",
   defaultEpsgName: "NTM sone 6",
   cameraHeadingOffsetDeg: 10,
-  minCameraHeightMeters: 80,
   pollIntervalMs: 100,
   defaultBaseMapMode: "foto",
   defaultNightMode: false,
