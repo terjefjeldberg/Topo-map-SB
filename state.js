@@ -263,6 +263,37 @@ function buildWgs84UtmDef(zone, south) {
   );
 }
 
+function buildSweref99Def(code) {
+  var zones = {
+    "3006": { lon0: 15.0, k: 0.9996, x0: 500000, y0: 0 },
+    "3007": { lon0: 12.0, k: 1.0, x0: 150000, y0: 0 },
+    "3008": { lon0: 13.5, k: 1.0, x0: 150000, y0: 0 },
+    "3009": { lon0: 15.0, k: 1.0, x0: 150000, y0: 0 },
+    "3010": { lon0: 16.5, k: 1.0, x0: 150000, y0: 0 },
+    "3011": { lon0: 18.0, k: 1.0, x0: 150000, y0: 0 },
+    "3012": { lon0: 14.25, k: 1.0, x0: 150000, y0: 0 },
+    "3013": { lon0: 15.75, k: 1.0, x0: 150000, y0: 0 },
+    "3014": { lon0: 17.25, k: 1.0, x0: 150000, y0: 0 },
+    "3015": { lon0: 18.75, k: 1.0, x0: 150000, y0: 0 },
+    "3016": { lon0: 20.25, k: 1.0, x0: 150000, y0: 0 },
+    "3017": { lon0: 21.75, k: 1.0, x0: 150000, y0: 0 },
+    "3018": { lon0: 23.25, k: 1.0, x0: 150000, y0: 0 },
+  };
+  var cfg = zones[String(code || "")];
+  if (!cfg) return "";
+  return (
+    "+proj=tmerc +lat_0=0 +lon_0=" +
+    cfg.lon0 +
+    " +k=" +
+    cfg.k +
+    " +x_0=" +
+    cfg.x0 +
+    " +y_0=" +
+    cfg.y0 +
+    " +ellps=GRS80 +units=m +no_defs +type=crs"
+  );
+}
+
 function buildProjectionDefs() {
   var defs = {
     "EPSG:4230": "+proj=longlat +datum=ED50 +no_defs +type=crs",
@@ -277,6 +308,24 @@ function buildProjectionDefs() {
   for (zone = 1; zone <= 10; zone++) {
     defs["EPSG:" + (5940 + zone)] = buildNtmDef(zone);
   }
+  [
+    "3006",
+    "3007",
+    "3008",
+    "3009",
+    "3010",
+    "3011",
+    "3012",
+    "3013",
+    "3014",
+    "3015",
+    "3016",
+    "3017",
+    "3018",
+  ].forEach(function (code) {
+    var def = buildSweref99Def(code);
+    if (def) defs["EPSG:" + code] = def;
+  });
   for (zone = 32; zone <= 35; zone++) {
     defs["EPSG:258" + zone] = buildEtrsUtmDef(zone);
   }
