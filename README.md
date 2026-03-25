@@ -12,7 +12,6 @@ StreamBIM widget that mirrors camera movement into a Cesium terrain view with op
 - `epsg.js`: EPSG search/setup UI logic.
 - `viewer.js`: Cesium setup, camera sync, basemap/night mode, buildings.
 - `measure.js`: Distance and area measuring tools.
-- `hierarchy-widget/`: Starter for IFC hierarchy tree widget (lazy-load + fallback).
 - `.github/workflows/deploy-pages.yml`: GitHub Pages deployment workflow.
 
 ## Local Run
